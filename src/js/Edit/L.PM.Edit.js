@@ -5,7 +5,7 @@ import EventMixin from '../Mixins/Events';
 import PinningMixin from '../Mixins/Pinning';
 
 const Edit = L.Class.extend({
-  includes: [DragMixin, SnapMixin, RotateMixin, EventMixin],
+  includes: [DragMixin, SnapMixin, RotateMixin, EventMixin,PinningMixin],
   options: {
     snappable: true, // TODO: next major Release, rename it to allowSnapping
     snapDistance: 20,
