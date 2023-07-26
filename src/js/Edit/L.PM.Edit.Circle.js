@@ -111,6 +111,11 @@ Edit.Circle = Edit.extend({
     this._createHintLine(this._centerMarker, this._outerMarker);
   },
   applyOptions() {
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
     if (this.options.snappable) {
       this._initSnappableMarkers();
       // update marker latlng when snapped latlng radius is out of min/max

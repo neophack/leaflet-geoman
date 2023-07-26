@@ -129,6 +129,11 @@ Edit.Line = Edit.extend({
     return this.enabled();
   },
   applyOptions() {
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
     if (this.options.snappable) {
       this._initSnappableMarkers();
     } else {
@@ -344,6 +349,9 @@ Edit.Line = Edit.extend({
 
     if (this.options.snappable) {
       this._initSnappableMarkers();
+    }
+    if (this.options.pinning) {
+      this._initPinning();
     }
   },
 

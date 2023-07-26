@@ -105,6 +105,12 @@ Edit.CircleMarker = Edit.extend({
       this.disableLayerDrag();
     }
 
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
+
     // Make it editable like a Circle
     if (this.options.editable) {
       this._initMarkers();
@@ -285,6 +291,14 @@ Edit.CircleMarker = Edit.extend({
     // if (!this._vertexValidation('move', e)) {
     // }
   },
+  _initPinning: function() {
+    var layer = this._layer;
+    layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
+    layer.on('pm:dragstart', this._onPinnedMarkerDragStart, this);
+  },
+  _disablePinning: function() {
+    this._layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
+  },
   _onMarkerDragStart(e) {
     if (!this._vertexValidation('move', e)) {
       return;
@@ -344,33 +358,33 @@ Edit.CircleMarker = Edit.extend({
     marker.off('pm:dragstart', this._unsnap, this);
   },
   _updateHiddenPolyCircle() {
-    const map = this._layer._map || this._map;
-    if (map) {
-      const radius = L.PM.Utils.pxRadiusToMeterRadius(
-        this._layer.getRadius(),
-        map,
-        this._layer.getLatLng()
-      );
-      const _layer = L.circle(this._layer.getLatLng(), this._layer.options);
-      _layer.setRadius(radius);
+    // const map = this._layer._map || this._map;
+    // if (map) {
+    //   const radius = L.PM.Utils.pxRadiusToMeterRadius(
+    //     this._layer.getRadius(),
+    //     map,
+    //     this._layer.getLatLng()
+    //   );
+    //   const _layer = L.circle(this._layer.getLatLng(), this._layer.options);
+    //   _layer.setRadius(radius);
 
-      const crsSimple = map && map.pm._isCRSSimple();
-      if (this._hiddenPolyCircle) {
-        this._hiddenPolyCircle.setLatLngs(
-          L.PM.Utils.circleToPolygon(_layer, 200, !crsSimple).getLatLngs()
-        );
-      } else {
-        this._hiddenPolyCircle = L.PM.Utils.circleToPolygon(
-          _layer,
-          200,
-          !crsSimple
-        );
-      }
+    //   const crsSimple = map && map.pm._isCRSSimple();
+    //   if (this._hiddenPolyCircle) {
+    //     this._hiddenPolyCircle.setLatLngs(
+    //       L.PM.Utils.circleToPolygon(_layer, 200, !crsSimple).getLatLngs()
+    //     );
+    //   } else {
+    //     this._hiddenPolyCircle = L.PM.Utils.circleToPolygon(
+    //       _layer,
+    //       200,
+    //       !crsSimple
+    //     );
+    //   }
 
-      if (!this._hiddenPolyCircle._parentCopy) {
-        this._hiddenPolyCircle._parentCopy = this._layer;
-      }
-    }
+    //   if (!this._hiddenPolyCircle._parentCopy) {
+    //     this._hiddenPolyCircle._parentCopy = this._layer;
+    //   }
+    // }
   },
   _getNewDestinationOfOuterMarker() {
     const latlng = this._centerMarker.getLatLng();

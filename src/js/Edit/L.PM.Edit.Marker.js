@@ -66,6 +66,11 @@ Edit.Marker = Edit.extend({
     }
   },
   applyOptions() {
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
     if (this.options.snappable) {
       this._initSnappableMarkers();
     } else {
@@ -92,6 +97,14 @@ Edit.Marker = Edit.extend({
   _onDragEnd() {
     this._fireEdit();
     this._layerEdited = true;
+  },
+  _initPinning: function() {
+    var layer = this._layer;
+    layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
+    layer.on('pm:dragstart', this._onPinnedMarkerDragStart, this);
+  },
+  _disablePinning: function() {
+    this._layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
   },
   // overwrite initSnappableMarkers from Snapping.js Mixin
   _initSnappableMarkers() {

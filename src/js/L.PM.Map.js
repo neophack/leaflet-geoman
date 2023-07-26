@@ -23,6 +23,7 @@ const Map = L.Class.extend({
     this.Keyboard = KeyboardMixins;
 
     this.globalOptions = {
+      pinning: false,
       snappable: true,
       layerGroup: undefined,
       snappingOrder: [
@@ -125,6 +126,8 @@ const Map = L.Class.extend({
       layer.pm.setOptions(options);
     });
 
+    this.Toolbar.toggleButton('pinningOption', options.pinning, false);
+    this.Toolbar.toggleButton('snappingOption', options.snappable, false);
     this.map.fire('pm:globaloptionschanged');
 
     // store options
