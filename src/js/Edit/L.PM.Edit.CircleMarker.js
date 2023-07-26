@@ -105,6 +105,12 @@ Edit.CircleMarker = Edit.extend({
       this.disableLayerDrag();
     }
 
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
+
     // Make it editable like a Circle
     if (this.options.editable) {
       this._initMarkers();

@@ -37,6 +37,11 @@ Edit.Rectangle = Edit.Polygon.extend({
     });
   },
   applyOptions() {
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
     if (this.options.snappable) {
       this._initSnappableMarkers();
     } else {
@@ -63,6 +68,7 @@ Edit.Rectangle = Edit.Polygon.extend({
   },
   // Add marker events after adding the snapping events to the markers, beacause of the execution order
   _addMarkerEvents() {
+    var self = this;
     this._markers[0].forEach((marker) => {
         marker.on('dragstart', self._onMarkerDragStart, self);
         marker.on('drag', self._onMarkerDrag, self);

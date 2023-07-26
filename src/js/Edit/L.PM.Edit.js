@@ -2,6 +2,7 @@ import SnapMixin from '../Mixins/Snapping';
 import DragMixin from '../Mixins/Dragging';
 import RotateMixin from '../Mixins/Rotating';
 import EventMixin from '../Mixins/Events';
+import PinningMixin from '../Mixins/Pinning';
 
 const Edit = L.Class.extend({
   includes: [DragMixin, SnapMixin, RotateMixin, EventMixin],
