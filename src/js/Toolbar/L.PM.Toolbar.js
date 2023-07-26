@@ -444,6 +444,7 @@ const Toolbar = L.Class.extend({
     };
     this._addButton('pinningOption', new L.Control.PMButton(pinningButton));
     this._addButton('snappingOption', new L.Control.PMButton(snappingButton));
+  },
   _showHideButtons() {
     // if Toolbar is not visible, we don't need to update button positions
     if (!this.isVisible) {
