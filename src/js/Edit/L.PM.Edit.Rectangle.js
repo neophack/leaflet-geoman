@@ -64,13 +64,13 @@ Edit.Rectangle = Edit.Polygon.extend({
   // Add marker events after adding the snapping events to the markers, beacause of the execution order
   _addMarkerEvents() {
     this._markers[0].forEach((marker) => {
-      marker.on('dragstart', this._onMarkerDragStart, this);
-      marker.on('drag', this._onMarkerDrag, this);
-      marker.on('dragend', this._onMarkerDragEnd, this);
+        marker.on('dragstart', self._onMarkerDragStart, self);
+        marker.on('drag', self._onMarkerDrag, self);
+        marker.on('dragend', self._onMarkerDragEnd, self);
 
       // TODO: Can we remove this? The _removeMarker Event is a empty function
-      if (!this.options.preventMarkerRemoval) {
-        marker.on('contextmenu', this._removeMarker, this);
+      if (!self.options.preventMarkerRemoval) {
+        marker.on('contextmenu', self._removeMarker, self);
       }
     });
   },
@@ -156,7 +156,7 @@ Edit.Rectangle = Edit.Polygon.extend({
     this._layer.setLatLngs(corners);
 
     // Reposition the markers at each corner
-    this._adjustAllMarkers();
+    this._adjustAllMarkers(movedMarker);
 
     // Redraw the shape (to update altered rectangle)
     this._layer.redraw();
@@ -164,7 +164,7 @@ Edit.Rectangle = Edit.Polygon.extend({
 
   // adjusts the position of all Markers
   // params: markerLatLngs -- an array of exactly LatLng objects
-  _adjustAllMarkers() {
+  _adjustAllMarkers(marker) {
     const markerLatLngs = this._layer.getLatLngs()[0];
 
     if (
@@ -189,9 +189,19 @@ Edit.Rectangle = Edit.Polygon.extend({
       // eslint-disable-next-line
       console.error('The layer has no LatLngs');
     } else {
-      this._cornerMarkers.forEach((marker) => {
-        marker.setLatLng(markerLatLngs[marker._index]);
+      var index = markerLatLngs.findIndex(function(latlng) {
+        return marker.getLatLng().equals(latlng);
       });
+
+      if (index > -1) {
+        this._cornerMarkers[(marker._index + 1) % 4].setLatLng(markerLatLngs[(index + 1) % 4]);
+        this._cornerMarkers[(marker._index + 2) % 4].setLatLng(markerLatLngs[(index + 2) % 4]);
+        this._cornerMarkers[(marker._index + 3) % 4].setLatLng(markerLatLngs[(index + 3) % 4]);
+      } else {
+        this._cornerMarkers.forEach(function(cornerMarker) {
+          cornerMarker.setLatLng(markerLatLngs[cornerMarker._index]);
+        });
+      }
     }
   },
   // finds the 4 corners of the current bounding box

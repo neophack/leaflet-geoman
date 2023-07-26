@@ -19,6 +19,7 @@ const Toolbar = L.Class.extend({
     removalMode: true,
     rotateMode: true,
     snappingOption: true,
+    pinningOption:true,
     drawControls: true,
     editControls: true,
     optionsControls: true,
@@ -407,8 +408,42 @@ const Toolbar = L.Class.extend({
     this._addButton('cutPolygon', new L.Control.PMButton(cutButton));
     this._addButton('removalMode', new L.Control.PMButton(deleteButton));
     this._addButton('rotateMode', new L.Control.PMButton(rotateButton));
-  },
 
+    const pinningButton = {
+      title:getTranslation('buttonTitles.pinningButton'),
+      // title: getTranslation('buttonTitles.pinningButton'),
+      className: 'control-icon leaflet-pm-icon-pinning',
+      onClick: () => {},
+      afterClick: () => {
+        const pinning = this.map.pm.getGlobalOptions().pinning;
+        this.map.pm.setGlobalOptions({ pinning: !pinning });
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: false,
+      disableByOtherButtons: false,
+      position: this.options.position,
+      tool: 'options',
+      actions: [],
+    };
+    const snappingButton = {
+      title: getTranslation('buttonTitles.snappingButton'),
+      className: 'control-icon leaflet-pm-icon-snapping',
+      onClick: () => {},
+      afterClick: () => {
+        const snappable = this.map.pm.getGlobalOptions().snappable;
+        this.map.pm.setGlobalOptions({ snappable: !snappable });
+      },
+      doToggle: true,
+      toggleStatus: true,
+      disableOtherButtons: false,
+      disableByOtherButtons: false,
+      position: this.options.position,
+      tool: 'options',
+      actions: [],
+    };
+    this._addButton('pinningOption', new L.Control.PMButton(pinningButton));
+    this._addButton('snappingOption', new L.Control.PMButton(snappingButton));
   _showHideButtons() {
     // if Toolbar is not visible, we don't need to update button positions
     if (!this.isVisible) {
@@ -675,6 +710,8 @@ const Toolbar = L.Class.extend({
       Removal: 'removalMode',
       Rotate: 'rotateMode',
       Text: 'drawText',
+      Snap: 'snappingOption',
+      Pin: 'pinningOption',
     };
   },
   _btnNameMapping(name) {

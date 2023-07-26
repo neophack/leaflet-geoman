@@ -285,6 +285,14 @@ Edit.CircleMarker = Edit.extend({
     // if (!this._vertexValidation('move', e)) {
     // }
   },
+  _initPinning: function() {
+    var layer = this._layer;
+    layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
+    layer.on('pm:dragstart', this._onPinnedMarkerDragStart, this);
+  },
+  _disablePinning: function() {
+    this._layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
+  },
   _onMarkerDragStart(e) {
     if (!this._vertexValidation('move', e)) {
       return;
@@ -343,7 +351,7 @@ Edit.CircleMarker = Edit.extend({
     marker.off('pm:dragend', this._cleanupSnapping, this);
     marker.off('pm:dragstart', this._unsnap, this);
   },
-  _updateHiddenPolyCircle() {
+  _updateHiddenPolyCircle_bk() {
     const map = this._layer._map || this._map;
     if (map) {
       const radius = L.PM.Utils.pxRadiusToMeterRadius(
@@ -370,6 +378,27 @@ Edit.CircleMarker = Edit.extend({
       if (!this._hiddenPolyCircle._parentCopy) {
         this._hiddenPolyCircle._parentCopy = this._layer;
       }
+    }
+  },
+  _updateHiddenPolyCircle: function() {
+    // Check if the map exists and if the CRS (Coordinate Reference System) is simple
+    var isSimpleCRS = this._map && this._map.pm._isCRSSimple();
+
+    // Convert circle to polygon with a 200-meter radius and without considering CRS if it's simple
+    var convertedPolygon = L.PM.Utils.circleToPolygon(this._layer, 200, !isSimpleCRS);
+
+    // If _hiddenPolyCircle already exists, update its coordinates
+    if (this._hiddenPolyCircle) {
+      this._hiddenPolyCircle.setLatLngs(convertedPolygon.getLatLngs());
+    }
+    // If _hiddenPolyCircle doesn't exist, create it and set its coordinates
+    else {
+      this._hiddenPolyCircle = convertedPolygon;
+    }
+
+    // If _hiddenPolyCircle does not have a reference to the circle layer, set it
+    if (!this._hiddenPolyCircle._parentCopy) {
+      this._hiddenPolyCircle._parentCopy = this._layer;
     }
   },
   _getNewDestinationOfOuterMarker() {
