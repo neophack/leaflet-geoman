@@ -182,6 +182,8 @@ const Draw = L.Class.extend({
       removalMode: 'Removal',
       rotateMode: 'Rotate',
       drawText: 'Text',
+      snappingOption: 'Snap',
+      pinningOption: 'Pin',
     };
 
     if (shapeMapping[name]) {

@@ -2,9 +2,10 @@ import SnapMixin from '../Mixins/Snapping';
 import DragMixin from '../Mixins/Dragging';
 import RotateMixin from '../Mixins/Rotating';
 import EventMixin from '../Mixins/Events';
+import PinningMixin from '../Mixins/Pinning';
 
 const Edit = L.Class.extend({
-  includes: [DragMixin, SnapMixin, RotateMixin, EventMixin],
+  includes: [DragMixin, SnapMixin, RotateMixin, EventMixin,PinningMixin],
   options: {
     snappable: true, // TODO: next major Release, rename it to allowSnapping
     snapDistance: 20,
@@ -26,6 +27,7 @@ const Edit = L.Class.extend({
     removeVertexValidation: undefined,
     addVertexValidation: undefined,
     moveVertexValidation: undefined,
+    allowPinning: true,
   },
   setOptions(options) {
     L.Util.setOptions(this, options);

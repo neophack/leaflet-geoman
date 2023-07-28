@@ -207,6 +207,8 @@ const theCollection = L.geoJson(geoJsonData, {
 
 theCollection.addTo(map2);
 
+map2.pm.setGlobalOptions({ allowCutting: false,pinning: false ,measurements:{measurement:true},showTooltip:true,pinning:true });
+
 const b = theCollection.getBounds();
 map2.fitBounds(b);
 

@@ -92,6 +92,11 @@ Edit.Text = Edit.extend({
     }
   },
   applyOptions() {
+    // if (this.options.pinning) {
+    //   this._initPinning();
+    // } else {
+    //   this._disablePinning();
+    // }
     if (this.options.snappable) {
       this._initSnappableMarkers();
     } else {

@@ -92,6 +92,9 @@
 .leaflet-pm-toolbar .leaflet-pm-icon-text {
   background-image: url('../assets/icons/Text.svg');
 }
+.leaflet-pm-toolbar .leaflet-pm-icon-pinning {
+  background-image: url('../assets/icons/Pinning.svg');
+}
 
 .leaflet-buttons-control-button:hover,
 .leaflet-buttons-control-button:focus {
