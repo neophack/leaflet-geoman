@@ -61,6 +61,7 @@ const Draw = L.Class.extend({
       'Circle',
       'Cut',
       'Text',
+      'Split',
     ];
 
     // initiate drawing class for our shapes
@@ -184,6 +185,7 @@ const Draw = L.Class.extend({
       drawText: 'Text',
       snappingOption: 'Snap',
       pinningOption: 'Pin',
+      splitMode: 'Split',
     };
 
     if (shapeMapping[name]) {

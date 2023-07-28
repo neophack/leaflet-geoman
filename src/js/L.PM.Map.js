@@ -159,6 +159,18 @@ const Map = L.Class.extend({
   disableGlobalCutMode() {
     return this.Draw.Cut.disable();
   },
+  globalSplitModeEnabled() {
+    return !!this.Draw.Split.enabled();
+  },
+  enableGlobalSplitMode(options) {
+    return this.Draw.Split.enable(options);
+  },
+  toggleGlobalSplitMode(options) {
+    return this.Draw.Split.toggle(options);
+  },
+  disableGlobalSplitMode() {
+    return this.Draw.Split.disable();
+  },
   getGeomanLayers(asGroup = false) {
     const layers = L.PM.Utils.findLayers(this.map);
     if (!asGroup) {

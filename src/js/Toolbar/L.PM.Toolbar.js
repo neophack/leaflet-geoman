@@ -18,6 +18,7 @@ const Toolbar = L.Class.extend({
     cutPolygon: true,
     removalMode: true,
     rotateMode: true,
+    splitMode:true,
     snappingOption: true,
     pinningOption:true,
     drawControls: true,
@@ -119,6 +120,7 @@ const Toolbar = L.Class.extend({
         editMode: 'control-icon leaflet-pm-icon-edit',
         dragMode: 'control-icon leaflet-pm-icon-drag',
         cutPolygon: 'control-icon leaflet-pm-icon-cut',
+        splitMode: 'control-icon leaflet-pm-icon-split',
         removalMode: 'control-icon leaflet-pm-icon-delete',
         drawText: 'control-icon leaflet-pm-icon-text',
       },
@@ -442,6 +444,27 @@ const Toolbar = L.Class.extend({
       tool: 'options',
       actions: [],
     };
+    const splitButton = {
+      name: 'splitMode',
+      title: getTranslation('buttonTitles.splitButton'),
+      className: 'control-icon leaflet-pm-icon-split',
+      jsClass: 'Split',
+      onClick: () => {},
+      afterClick: (e, ctx) => {
+        this.map.pm.Draw[ctx.button._button.jsClass].toggle({
+          snappable: true,
+          cursorMarker: true,
+          allowSelfIntersection: false,
+        });
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['finish', 'removeLastVertex', 'cancel'],
+    };
+    this._addButton('splitMode', new L.Control.PMButton(splitButton));
     this._addButton('pinningOption', new L.Control.PMButton(pinningButton));
     this._addButton('snappingOption', new L.Control.PMButton(snappingButton));
   },
@@ -711,6 +734,7 @@ const Toolbar = L.Class.extend({
       Removal: 'removalMode',
       Rotate: 'rotateMode',
       Text: 'drawText',
+      Split: 'splitMode',
       Snap: 'snappingOption',
       Pin: 'pinningOption',
     };

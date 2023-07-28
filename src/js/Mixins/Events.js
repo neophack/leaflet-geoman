@@ -81,7 +81,27 @@ const EventMixin = {
       customPayload
     );
   },
-
+  _fireSplit(
+    fireLayer,
+    splitLayer,
+    layer,
+    originalLayer,
+    source = 'Draw',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:split',
+      {
+        shape: this._shape,
+        splitLayer,
+        layer,
+        originalLayer,
+      },
+      source,
+      customPayload
+    );
+  },
   // Edit Events
   // Fired when layer is edited / changed
   _fireEdit(fireLayer = this._layer, source = 'Edit', customPayload = {}) {
@@ -649,6 +669,18 @@ const EventMixin = {
       'pm:globalrotatemodetoggled',
       {
         enabled: this.globalRotateModeEnabled(),
+        map: this.map,
+      },
+      source,
+      customPayload
+    );
+  },
+  _fireGlobalSplitModeToggled(source = 'Global', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:globalsplitmodetoggled',
+      {
+        enabled: this.globalSplitModeEnabled(),
         map: this.map,
       },
       source,
