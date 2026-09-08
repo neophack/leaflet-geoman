@@ -291,6 +291,12 @@
         background: #4caf50;
       }
 
+      /* Keep Leaflet's bottom-corner controls (Pin/SnapGuides/AutoTrace
+         toolbar block, attribution) clear of the status bar overlay */
+      #map .leaflet-bottom {
+        margin-bottom: 28px;
+      }
+
       /* Keyboard hint */
       kbd {
         display: inline-block;
@@ -371,6 +377,72 @@
                 <span class="label">Self-Intersecting</span>
                 <span class="count">edge case</span>
               </button>
+              <button class="test-case-btn" data-testcase="large-layer">
+                <span class="icon">🧵</span>
+                <span class="label">Large Polyline</span>
+                <span class="count">20000 vertices</span>
+              </button>
+              <button class="test-case-btn" data-testcase="categories">
+                <span class="icon">🏷️</span>
+                <span class="label">Categories</span>
+                <span class="count">river/house</span>
+              </button>
+              <button class="test-case-btn" data-testcase="boolean-ops">
+                <span class="icon">➕</span>
+                <span class="label">Union / Difference</span>
+                <span class="count">2 overlapping</span>
+              </button>
+              <button class="test-case-btn" data-testcase="pinning">
+                <span class="icon">📌</span>
+                <span class="label">Pinning &amp; Trace</span>
+                <span class="count">shared vertices</span>
+              </button>
+              <button class="test-case-btn" data-testcase="text-image">
+                <span class="icon">🖼️</span>
+                <span class="label">Text &amp; Image</span>
+                <span class="count">copy mode</span>
+              </button>
+              <button class="test-case-btn" data-testcase="keyboard-shortcuts">
+                <span class="icon">⌨️</span>
+                <span class="label">Keyboard Shortcuts</span>
+                <span class="count">esc/enter/undo</span>
+              </button>
+            </div>
+          </section>
+
+          <!-- Categories -->
+          <section class="sidebar-section">
+            <h2>Active Category</h2>
+            <div class="option-group">
+              <div class="option-row">
+                <div class="option-label">
+                  Category
+                  <small
+                    >Stamped on new layers - Ctrl/Cmd+click an existing layer to
+                    apply it there too (also works in Edit mode, via the
+                    dropdown value)</small
+                  >
+                </div>
+                <select
+                  id="opt-category"
+                  class="number-input"
+                  style="width: 90px"
+                >
+                  <option value="">(none)</option>
+                  <option value="river">river</option>
+                  <option value="house">house</option>
+                  <option value="road">road</option>
+                </select>
+              </div>
+              <div class="option-row">
+                <div class="option-label">
+                  Apply style
+                  <small>Restyle layers now</small>
+                </div>
+                <button class="action-btn" id="btn-category-restyle">
+                  Restyle
+                </button>
+              </div>
             </div>
           </section>
 
@@ -378,6 +450,17 @@
           <section class="sidebar-section">
             <h2>Global Options</h2>
             <div class="option-group">
+              <div class="option-row">
+                <div class="option-label">
+                  Pro Extensions
+                  <small>lasso / layer order / freehand / point / copy</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-proExtensions" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
               <div class="option-row">
                 <div class="option-label">
                   Snappable
@@ -439,6 +522,17 @@
 
               <div class="option-row">
                 <div class="option-label">
+                  Keyboard Shortcuts
+                  <small>M/L/P/R/C/T/F/E/G/X/O/S, Shift+M, Delete</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-keyboardShortcuts" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
                   Snap to Middle
                   <small>Snap to segment midpoints</small>
                 </div>
@@ -462,6 +556,117 @@
                   <span class="toggle-slider"></span>
                 </label>
               </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Snap to 90°
+                  <small>Angle snapping while drawing</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-snapTo90" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Rectangle Drag Draw
+                  <small>Press-drag-release</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-dragDraw" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Measurements
+                  <small>Live length / area / radius</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-showMeasurements" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Snap Guides
+                  <small>Dashed 90° guide lines</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-snapGuides" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Auto Trace
+                  <small>Trace layer borders while drawing</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-autoTrace" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Pinning
+                  <small>Pin shared vertices across layers</small>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="opt-pinning" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Selection Effect
+                  <small>How selected shapes are highlighted</small>
+                </div>
+                <select
+                  id="opt-selectionEffect"
+                  class="number-input"
+                  style="width: 120px"
+                >
+                  <option value="dim">Dim others</option>
+                  <option value="outline">Black outline</option>
+                </select>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Stroke Style
+                  <small>Solid or dashed selection outline frames</small>
+                </div>
+                <select
+                  id="opt-strokeStyle"
+                  class="number-input"
+                  style="width: 120px"
+                >
+                  <option value="solid">Solid line</option>
+                  <option value="dashed">Dashed line</option>
+                </select>
+              </div>
+
+              <div class="option-row">
+                <div class="option-label">
+                  Large Layer Threshold
+                  <small>0 = no decimation</small>
+                </div>
+                <input
+                  type="number"
+                  class="number-input"
+                  id="opt-largeLayerThreshold"
+                  value="1000"
+                  min="0"
+                  max="50000"
+                />
+              </div>
             </div>
           </section>
 
@@ -473,6 +678,8 @@
               <button class="action-btn" id="btn-disable-edit">
                 Disable Edit
               </button>
+              <button class="action-btn" id="btn-undo">Undo (Ctrl+Z)</button>
+              <button class="action-btn" id="btn-redo">Redo (Ctrl+Y)</button>
               <button class="action-btn" id="btn-export">Export GeoJSON</button>
               <button class="action-btn danger" id="btn-clear">
                 Clear All
@@ -486,6 +693,8 @@
             <div style="font-size: 12px; color: #888; line-height: 2">
               <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> Toggle DevPanel<br />
               <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> Export to Console<br />
+              <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo / <kbd>Ctrl</kbd>+<kbd>Y</kbd>
+              Redo<br />
               <kbd>Esc</kbd> Exit current mode<br />
               <kbd>Enter</kbd> Complete drawing
             </div>
@@ -513,6 +722,18 @@
             <span class="status-dot" id="status-remove"></span>
             Remove
           </div>
+          <div class="status-item">
+            <span class="status-dot" id="status-cut"></span>
+            Cut
+          </div>
+          <div class="status-item">
+            <span class="status-dot" id="status-rotate"></span>
+            Rotate
+          </div>
+          <div class="status-item">
+            <span class="status-dot" id="status-scale"></span>
+            Scale
+          </div>
           <div class="status-item" style="margin-left: auto">
             Layers: <span id="status-layers">0</span>
           </div>
@@ -532,47 +753,87 @@
 
     <script>
       // Initialize map
-      const map = L.map('map').setView([51.505, -0.09], 13);
+      const map = L.map('map').setView([51.514244, 7.468429], 14);
 
+      // OSM raster tiles
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution:
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map);
 
-      // Add Geoman controls
-      map.pm.addControls({
-        position: 'topleft',
-        drawMarker: true,
-        drawCircleMarker: true,
-        drawPolyline: true,
-        drawRectangle: true,
-        drawPolygon: true,
-        drawCircle: true,
-        drawText: true,
-        editMode: true,
-        dragMode: true,
-        cutPolygon: true,
-        removalMode: true,
-        rotateMode: true,
-      });
+      // Add Geoman controls - a plain `addControls()` call with the library
+      // defaults
+      map.pm.addControls();
 
       // Set initial global options
       map.pm.setGlobalOptions({
-        snappable: true,
-        snapDistance: 20,
-        draggable: true,
+        measurements: {
+          measurement: true,
+          displayFormat: 'metric',
+        },
       });
+
+      // Register categories with per-category styling
+      map.pm.setCategory('river', {
+        pathOptions: { color: '#3388ff', weight: 4, fillColor: '#3388ff' },
+      });
+      map.pm.setCategory('house', {
+        pathOptions: {
+          color: '#e94560',
+          fillColor: '#ff9800',
+          fillOpacity: 0.6,
+        },
+      });
+      map.pm.setCategory('road', {
+        pathOptions: { color: '#4caf50', weight: 5 },
+      });
+
+      // Color each dropdown option like its category's shape color, so the
+      // Active Category picker doubles as a legend (river = blue, etc.)
+      function refreshCategoryDropdown() {
+        const select = document.getElementById('opt-category');
+        const previousValue = select.value;
+        Array.from(select.options).forEach((option) => {
+          if (!option.value) return; // leave "(none)" unstyled
+          const category = map.pm.getCategories()[option.value];
+          const color = category?.pathOptions?.color;
+          option.style.color = color || '';
+        });
+        select.value = previousValue;
+      }
+      refreshCategoryDropdown();
 
       // ============================================
       // Test Cases
       // ============================================
+
+      // While Edit mode is on, clicking a layer stamps it with whatever the
+      // Active Category dropdown is set to (including clearing it via
+      // "(none)") - the only way to (re)categorize a layer that already
+      // exists, since the dropdown otherwise only affects new draws.
+      // bound on the DOM element instead of as a Leaflet event: a layer
+      // listening to 'click' would consume the click in Leaflet's routing
+      // and drawing on top of the layer would be impossible
+      function bindCategoryClick(layer) {
+        const element = layer.getElement ? layer.getElement() : null;
+        if (!element) return;
+        L.DomEvent.on(element, 'click', () => {
+          if (!map.pm.globalEditModeEnabled()) return;
+          const category = document.getElementById('opt-category').value;
+          layer.pm.setCategory(category || undefined);
+          console.log(
+            `[Geoman] Edit-mode click: layer category = ${category || '(none)'}`
+          );
+        });
+      }
 
       // Helper to create layers that Geoman will track
       // Sets _drawnByGeoman = true so getGeomanDrawLayers() includes them
       function addToGeoman(layer) {
         layer.addTo(map);
         layer._drawnByGeoman = true;
+        bindCategoryClick(layer);
         return layer;
       }
 
@@ -625,7 +886,7 @@
               [51.49, -0.1],
               [51.5, -0.08],
             ],
-            { color: '#0f3460' }
+            { color: '#3388ff' }
           );
 
           // Polyline
@@ -718,7 +979,7 @@
               [51.51, -0.08],
               [51.51, -0.1],
             ],
-            { color: '#0f3460' }
+            { color: '#3388ff' }
           ).addTo(group);
           p2._drawnByGeoman = true;
 
@@ -795,6 +1056,234 @@
 
           map.setView([51.51, -0.08], 14);
         },
+
+        // 20000-vertex polyline: tests zoom-dependent decimation +
+        // viewport culling in rendering (issue #366 / large layers perf)
+        'large-layer': () => {
+          clearAllLayers();
+
+          const points = [];
+          for (let i = 0; i < 20000; i++) {
+            points.push([
+              51.45 + i * 0.00001,
+              -0.15 + Math.sin(i / 80) * 0.03 + Math.cos(i / 300) * 0.01,
+            ]);
+          }
+          createPolyline(points, { color: '#e94560', weight: 2 });
+
+          map.setView([51.5, -0.12], 9);
+          console.log(
+            '[Test] Large polyline loaded (20000 vertices). ' +
+              'Zoom in/out to see decimation; enable Edit to test marker culling. ' +
+              'Export GeoJSON to verify full geometry is preserved.'
+          );
+        },
+
+        // Pre-stamped category layers; switch the Active Category
+        // dropdown and draw new shapes to test auto-stamping
+        categories: () => {
+          clearAllLayers();
+
+          const river = createPolyline(
+            [
+              [51.5, -0.12],
+              [51.505, -0.09],
+              [51.502, -0.06],
+              [51.51, -0.04],
+            ],
+            { color: '#3388ff', weight: 4 }
+          );
+          river.pm.setCategory('river');
+
+          const house = createRectangle(
+            [
+              [51.508, -0.08],
+              [51.514, -0.072],
+            ],
+            { color: '#e94560' }
+          );
+          house.pm.setCategory('house');
+
+          const road = createPolyline(
+            [
+              [51.495, -0.1],
+              [51.515, -0.1],
+            ],
+            { color: '#4caf50', weight: 5 }
+          );
+          road.pm.setCategory('road');
+
+          map.fitBounds([
+            [51.49, -0.13],
+            [51.52, -0.03],
+          ]);
+          console.log(
+            '[Test] Category layers loaded. Pick an Active Category and draw a new shape — ' +
+              'it should be auto-stamped and styled. Try map.pm.setCategory("river", { pathOptions: { color: "red" } }) ' +
+              'to restyle all layers of a category.'
+          );
+        },
+
+        // Two overlapping polygons for trying Union, Difference and Split
+        // (select the layers with the lasso or click both while a boolean
+        // mode is active, then use the toolbar / or just enable the mode and
+        // click-drag a selection)
+        'boolean-ops': () => {
+          clearAllLayers();
+
+          createPolygon(
+            [
+              [51.505, -0.11],
+              [51.505, -0.06],
+              [51.53, -0.06],
+              [51.53, -0.11],
+            ],
+            { color: '#e94560' }
+          );
+
+          createPolygon(
+            [
+              [51.51, -0.09],
+              [51.51, -0.04],
+              [51.535, -0.04],
+              [51.535, -0.09],
+            ],
+            { color: '#3388ff' }
+          );
+
+          map.fitBounds([
+            [51.5, -0.12],
+            [51.54, -0.03],
+          ]);
+          console.log(
+            '[Test] Overlapping polygons loaded. Enable Union or Difference mode and select both layers ' +
+              'to merge or subtract them. Split Mode draws a line to cut a layer in two. ' +
+              'Scale Mode resizes around the center.'
+          );
+        },
+
+        // Two squares sharing a corner vertex: with Pinning enabled, Edit
+        // Mode and drag the shared corner - vertices at the same position
+        // are linked automatically and follow the drag live. With Auto Trace
+        // enabled, draw a line along a
+        // square border and it is traced
+        pinning: () => {
+          clearAllLayers();
+
+          createPolygon(
+            [
+              [51.505, -0.1],
+              [51.505, -0.06],
+              [51.53, -0.06],
+              [51.53, -0.1],
+            ],
+            { color: '#e94560' }
+          );
+
+          createPolygon(
+            [
+              [51.53, -0.06],
+              [51.545, -0.06],
+              [51.545, -0.075],
+              [51.53, -0.075],
+            ],
+            { color: '#4caf50' }
+          );
+
+          map.fitBounds([
+            [51.5, -0.11],
+            [51.55, -0.05],
+          ]);
+          console.log(
+            '[Test] Two squares sharing the corner [51.53, -0.06] loaded. ' +
+              'Enable Pinning (sidebar or toolbar pin icon), then Edit Mode and drag the shared corner - ' +
+              'both squares follow live while you drag (vertices at the same position are pinned automatically). ' +
+              'Enable Auto Trace and draw a polyline that snaps onto a border - the border segment is traced.'
+          );
+        },
+
+        // Text marker + image overlay: exercises the Copy Layer mode fixes
+        // that gave both shape types real support (text markers used to have
+        // their <textarea> node stolen by the copy instead of getting their
+        // own, and image overlays were skipped by copyLayer() entirely)
+        'text-image': () => {
+          clearAllLayers();
+
+          addToGeoman(
+            L.marker([51.507, -0.09], {
+              textMarker: true,
+              text: 'Copy me with Copy Layer mode',
+            })
+          );
+
+          const overlaySvg =
+            'data:image/svg+xml;charset=UTF-8,' +
+            encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="140">' +
+                '<rect width="200" height="140" fill="#3388ff"/>' +
+                '<text x="100" y="75" font-size="16" fill="#eee" text-anchor="middle" font-family="sans-serif">Image Overlay</text>' +
+                '</svg>'
+            );
+          addToGeoman(
+            L.imageOverlay(
+              overlaySvg,
+              [
+                [51.5, -0.1],
+                [51.512, -0.078],
+              ],
+              { interactive: true }
+            )
+          );
+
+          map.fitBounds([
+            [51.498, -0.11],
+            [51.514, -0.075],
+          ]);
+          console.log(
+            '[Test] Text marker + image overlay loaded. Enable Copy Layer mode and click either one - ' +
+              'the text marker keeps its own editable text on the copy, and the image overlay is duplicated with an offset.'
+          );
+        },
+
+        // Escape / Enter / toolbar hotkeys / Undo-Redo: exitModeOnEscape,
+        // finishOnEnter & keyboardShortcuts are all opt-in, so this turns
+        // them on (and keeps the sidebar checkboxes in the Global Options
+        // section in sync) so every shortcut works right away
+        'keyboard-shortcuts': () => {
+          clearAllLayers();
+
+          map.pm.setGlobalOptions({
+            exitModeOnEscape: true,
+            finishOnEnter: true,
+            keyboardShortcuts: true,
+          });
+          document.getElementById('opt-exitModeOnEscape').checked = true;
+          document.getElementById('opt-finishOnEnter').checked = true;
+          document.getElementById('opt-keyboardShortcuts').checked = true;
+
+          createPolygon([
+            [51.505, -0.095],
+            [51.505, -0.085],
+            [51.512, -0.085],
+            [51.512, -0.095],
+          ]);
+
+          map.fitBounds([
+            [51.5, -0.1],
+            [51.517, -0.08],
+          ]);
+          console.log(
+            '[Test] Keyboard shortcuts enabled. Try:\n' +
+              '  M / Shift+M / L / P / R / C / T / F  - toggle Marker/CircleMarker/Line/Polygon/Rectangle/Circle/Text/Freehand drawing (hover the toolbar icons to see each hint)\n' +
+              '  E / G / X / O / S                    - toggle Edit/Drag/Cut/Rotate/Scale mode\n' +
+              '  Delete                                - toggle Removal mode\n' +
+              '  Escape - exits the active mode (Draw, Edit, Drag, Removal, Rotate, Cut - same set as upstream Geoman)\n' +
+              '  Enter  - finishes the shape while drawing a Line/Polygon/Rectangle/Circle/Cut, once it has enough vertices (same rules as upstream Geoman)\n' +
+              '  Ctrl+Z / Cmd+Z          - undo the last action\n' +
+              '  Ctrl+Y or Ctrl+Shift+Z  - redo\n' +
+              'Undo/redo are always on. Press P to draw a polygon, Enter to finish it, then Ctrl+Z to undo and Ctrl+Y to redo.'
+          );
+        },
       };
 
       // ============================================
@@ -816,8 +1305,48 @@
         updateStatus();
       }
 
+      // Native hover tooltip showing a layer's category (or "No category").
+      // Re-run from updateStatus() so it stays correct after drawing,
+      // undo/redo, category changes, and boolean ops (Union/Difference/
+      // Split/Cut silently stamp the result's category, so there's no
+      // single event to hook - just recompute for every tracked layer).
+      function categoryTitleFor(layer) {
+        const category =
+          layer.pm && typeof layer.pm.getCategory === 'function'
+            ? layer.pm.getCategory()
+            : undefined;
+        return category ? `Category: ${category}` : 'No category';
+      }
+
+      // SVG elements ignore the `title` attribute for native tooltips -
+      // browsers only show one from a <title> child element, so vector
+      // layers (path/polygon/polyline/circle) need that instead of the
+      // HTML-style attribute markers/icons use.
+      function updateLayerTitles() {
+        map.pm.getGeomanDrawLayers().forEach((layer) => {
+          if (typeof layer.getElement !== 'function') return;
+          const el = layer.getElement();
+          if (!el) return;
+          const text = categoryTitleFor(layer);
+          if (el instanceof SVGElement) {
+            let titleEl = el.querySelector('title');
+            if (!titleEl) {
+              titleEl = document.createElementNS(
+                'http://www.w3.org/2000/svg',
+                'title'
+              );
+              el.appendChild(titleEl);
+            }
+            titleEl.textContent = text;
+          } else {
+            el.setAttribute('title', text);
+          }
+        });
+      }
+
       function updateStatus() {
         const pm = map.pm;
+        updateLayerTitles();
 
         document
           .getElementById('status-draw')
@@ -831,6 +1360,21 @@
         document
           .getElementById('status-remove')
           .classList.toggle('active', pm.globalRemovalModeEnabled());
+        document
+          .getElementById('status-cut')
+          .classList.toggle('active', pm.globalCutModeEnabled());
+        document
+          .getElementById('status-rotate')
+          .classList.toggle(
+            'active',
+            !!pm.globalRotateModeEnabled && pm.globalRotateModeEnabled()
+          );
+        document
+          .getElementById('status-scale')
+          .classList.toggle(
+            'active',
+            !!pm.globalScaleModeEnabled && pm.globalScaleModeEnabled()
+          );
 
         const layers = pm.getGeomanDrawLayers();
         document.getElementById('status-layers').textContent = layers.length;
@@ -858,12 +1402,107 @@
         'opt-draggable': { type: 'boolean', option: 'draggable' },
         'opt-exitModeOnEscape': { type: 'boolean', option: 'exitModeOnEscape' },
         'opt-finishOnEnter': { type: 'boolean', option: 'finishOnEnter' },
+        'opt-keyboardShortcuts': {
+          type: 'boolean',
+          option: 'keyboardShortcuts',
+        },
         'opt-snapMiddle': { type: 'boolean', option: 'snapMiddle' },
         'opt-allowSelfIntersection': {
           type: 'boolean',
           option: 'allowSelfIntersection',
         },
+        'opt-snapTo90': { type: 'boolean', option: 'snapTo90' },
+        'opt-dragDraw': { type: 'boolean', option: 'dragDraw' },
+        'opt-showMeasurements': {
+          type: 'boolean',
+          option: 'showMeasurements',
+        },
+        'opt-largeLayerThreshold': {
+          type: 'number',
+          option: 'largeLayerThreshold',
+        },
       };
+
+      // Snap guides / auto trace keep the matching toolbar option-button in
+      // sync so both UIs reflect the same state
+      function syncToolbarOption(buttonName, state) {
+        try {
+          map.pm.Toolbar.toggleButton(buttonName, state, true);
+        } catch (e) {
+          /* button not present - ignore */
+        }
+      }
+
+      document
+        .getElementById('opt-snapGuides')
+        .addEventListener('change', (e) => {
+          map.pm.setGlobalOptions({ showSnapGuides: e.target.checked });
+          console.log(`[Geoman] showSnapGuides = ${e.target.checked}`);
+        });
+
+      document
+        .getElementById('opt-autoTrace')
+        .addEventListener('change', (e) => {
+          map.pm.setGlobalOptions({ autoTrace: e.target.checked });
+          syncToolbarOption('autoTracingOption', e.target.checked);
+          console.log(`[Geoman] autoTrace = ${e.target.checked}`);
+        });
+
+      document.getElementById('opt-pinning').addEventListener('change', (e) => {
+        if (e.target.checked) {
+          map.pm.enablePinning();
+        } else {
+          map.pm.disablePinning();
+        }
+        console.log(`[Geoman] pinning = ${e.target.checked}`);
+      });
+
+      // Selection highlight style: black frame around the selected shapes,
+      // or dimming every other layer (the default)
+      document
+        .getElementById('opt-selectionEffect')
+        .addEventListener('change', (e) => {
+          map.pm.setGlobalOptions({ selectionEffect: e.target.value });
+          console.log(`[Geoman] selectionEffect = ${e.target.value}`);
+        });
+
+      // Stroke style of the selection outline frames: the library option
+      // restyles the current selection on its own (Map.js re-apply hook) -
+      // no manual restyling here, and the layers themselves are untouched
+      document
+        .getElementById('opt-strokeStyle')
+        .addEventListener('change', (e) => {
+          map.pm.setGlobalOptions({
+            selectionOutlineStyle: e.target.value,
+          });
+          console.log(`[Geoman] selectionOutlineStyle = ${e.target.value}`);
+        });
+
+      // Pro extension toolbar buttons (lasso, layer order up/down, freehand,
+      // point, copy, simplify) are off by default - this switch shows or
+      // hides the whole set at once
+      const PRO_EXTENSION_BUTTONS = [
+        'lassoMode',
+        'bringToFrontMode',
+        'sendToBackMode',
+        'drawFreehand',
+        'drawPoint',
+        'copyLayerMode',
+        'lineSimplificationMode',
+      ];
+      document
+        .getElementById('opt-proExtensions')
+        .addEventListener('change', (e) => {
+          const on = e.target.checked;
+          const options = {};
+          PRO_EXTENSION_BUTTONS.forEach((name) => {
+            options[name] = on;
+          });
+          map.pm.addControls(options);
+          console.log(
+            `[Geoman] pro extension buttons = ${on ? 'shown' : 'hidden'}`
+          );
+        });
 
       Object.entries(optionInputs).forEach(([id, config]) => {
         const el = document.getElementById(id);
@@ -918,14 +1557,53 @@
         }
       });
 
+      // Category controls
+      document
+        .getElementById('opt-category')
+        .addEventListener('change', (e) => {
+          const value = e.target.value || undefined;
+          map.pm.setActiveCategory(value);
+          console.log(`[Geoman] Active category = ${value || '(none)'}`);
+        });
+
+      document
+        .getElementById('btn-category-restyle')
+        .addEventListener('click', () => {
+          ['river', 'house', 'road'].forEach((name) => {
+            const layers = map.pm.getLayersByCategory(name);
+            console.log(`[Geoman] Category "${name}": ${layers.length} layers`);
+          });
+        });
+
+      // Undo / Redo
+      document.getElementById('btn-undo').addEventListener('click', () => {
+        map.pm.undo();
+      });
+      document.getElementById('btn-redo').addEventListener('click', () => {
+        map.pm.redo();
+      });
+
       // Status updates
       const statusEvents = [
         'pm:globaldrawmodetoggled',
         'pm:globaleditmodetoggled',
         'pm:globaldragmodetoggled',
         'pm:globalremovalmodetoggled',
+        'pm:globalcutmodetoggled',
+        'pm:globalrotatemodetoggled',
+        'pm:globalscalemodetoggled',
+        'pm:globalunionmodetoggled',
+        'pm:globaldifferencemodetoggled',
+        'pm:globalsplitmodetoggled',
+        'pm:globallassomodetoggled',
         'pm:create',
         'pm:remove',
+        'pm:categorychange',
+        'pm:union',
+        'pm:difference',
+        'pm:split',
+        'pm:cut',
+        'pm:copylayer',
         'layeradd',
         'layerremove',
       ];
@@ -933,6 +1611,31 @@
       statusEvents.forEach((event) => {
         map.on(event, updateStatus);
       });
+
+      // Layers created outside of addToGeoman() (drawn via the toolbar, or
+      // produced by Union/Difference/Split/Cut/Copy) still need the
+      // Edit-mode category-click handler bound
+      function bindCategoryClickDeep(layer) {
+        if (!layer) return;
+        if (layer instanceof L.LayerGroup) {
+          layer.eachLayer(bindCategoryClickDeep);
+        } else {
+          bindCategoryClick(layer);
+        }
+      }
+      // the result of each op arrives under its documented payload key
+      // (pm:union / pm:difference: resultLayer, pm:split: layers,
+      // pm:copylayer: newLayer)
+      map.on('pm:create', ({ layer }) => bindCategoryClickDeep(layer));
+      map.on('pm:union', ({ resultLayer }) =>
+        bindCategoryClickDeep(resultLayer)
+      );
+      map.on('pm:difference', ({ resultLayer }) =>
+        bindCategoryClickDeep(resultLayer)
+      );
+      map.on('pm:split', ({ layers }) => layers.forEach(bindCategoryClickDeep));
+      map.on('pm:cut', ({ layer }) => bindCategoryClickDeep(layer));
+      map.on('pm:copylayer', ({ newLayer }) => bindCategoryClickDeep(newLayer));
 
       // Initial status
       updateStatus();
