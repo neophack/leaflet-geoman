@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Align the Pro-feature APIs with the official Geoman API: `enableGlobalCopyLayerMode()` / `pm:copylayer` (payload `sourceLayer`, `newLayer`, `shape`), `enableGlobalLineSimplificationMode()` / `pm:globallinesimplificationmodetoggled`, `pm:lasso-select` (payload `lassoCoords`, `selectionChangedLayers`, `selectedLayers`), `pm:globalbringtofrontmodetoggled` / `pm:globalbringtobackmodetoggled`, `pm:selectionadd` / `pm:selectionremove`, `union(layer1, layer2)` and the official `pm:union` / `pm:difference` / `pm:split` payloads
+- Split Mode: official layer option `splitMark` (replaces `allowSplitting`) and `splitOnlyMarkedLayers` mode option, plus the `map.pm.enableGlobalSplitMode()` / `toggleGlobalSplitMode()` / `globalSplitModeEnabled()` / `pm:globalsplitmodetoggled` API
+- Lasso: official sub-API (`setLassoAppendMode` / `setLassoSubtractMode` / `setLassoResetMode` / `getLassoMode`, `setLassoIntersectSelectMode` / `setLassoContainSelectMode` / `getLassoSelectMode`, `lassoDrawOptions`, `lassoSelectable` layer option) and `map.pm.Draw.Lasso` with the official mode constants
+- Selection: official `enableSelectionTool` / `disableSelectionTool` / `selectionToolEnabled` / `addSelection` / `removeSelection` / `isLayerSelected` / `cleanupSelection` methods
+- Scale: official `layer.pm.scaleLayer(percent | {w, h})` and `layer.pm.cancel()` / `map.pm.cancelGlobalScaleMode()`, official scale event payloads
+- LineSimplification: `map.pm.cancelGlobalLineSimplificationMode()` reverts the simplifications of the active mode session
+- CopyLayer: `map.pm.resetCopyLayerMode()` (official API)
+- Add `L.PM.Utils.getMeasurements(layer, map, displayFormat)` (official `MeasurementData` structure) and `L.PM.Utils.copyLayer(layer)`
+
+### Fixed
+
+- Selection clicks no longer break Leaflet's click routing: binding the click-to-select as a Leaflet event on every layer consumed clicks (drawing / cutting on top of layers was impossible), and stopping propagation at DOM level killed user `layer.on('click')` listeners. The handler is now bound on the layer element, never stops propagation and marks the event so background-click deselection still works
+- Toolbar blocks no longer wrap into columns next to the stack - the wrapped columns (and the wide text action buttons) covered the map and swallowed map clicks (Cut Mode clicks hit "Remove Last Vertex")
+- Geoman's internal helper markers (vertex / middle / hint markers) are never selection-clickable anymore
+- Measurement tooltips no longer overwrite or remove a tooltip the user bound on a layer themselves
+- Scaling a circle no longer crashes the scale start (circles have no `getLatLngs`)
+
 ## [2.20.0] - 2026-06-23
 
 ### Added
