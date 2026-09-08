@@ -20,6 +20,19 @@ import './commands';
 // require('./commands')
 
 beforeEach(() => {
+  // The test runner may have no internet access: stub tile requests with a
+  // 1x1 transparent PNG so the window `load` event is not blocked by hanging
+  // tile downloads.
+  const TRANSPARENT_PIXEL = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  cy.intercept('GET', 'https://tile.openstreetmap.org/**', {
+    statusCode: 200,
+    headers: { 'content-type': 'image/png' },
+    body: TRANSPARENT_PIXEL,
+  });
+
   // create the map
   cy.visit('/index.html', {
     onLoad: (contentWindow) => {
@@ -44,9 +57,12 @@ beforeEach(() => {
 
       contentWindow.map = map;
 
-      contentWindow.ONE_BLOCK_CONTROL_COUNT = 12;
+      // the fork shows the default-on Pro buttons as well: the draw block
+      // (7) plus edit block with Split/Scale/Union (8) plus the options
+      // block with Pinning/Snapping/AutoTrace/SnapGuides (4)
+      contentWindow.ONE_BLOCK_CONTROL_COUNT = 19;
       contentWindow.TOP_RIGHT_BLOCK_CONTROL_COUNT = 7;
-      contentWindow.TOP_LEFT_BLOCK_CONTROL_COUNT = 6;
+      contentWindow.TOP_LEFT_BLOCK_CONTROL_COUNT = 13;
 
       // add leaflet-geoman toolbar
       map.pm.addControls();

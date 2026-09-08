@@ -408,6 +408,9 @@ describe('Rotation', () => {
         [3, 4],
       ];
       const rect = L.rectangle(coords).addTo(map);
+      // edit markers outside the viewport are culled (limitMarkersToViewport),
+      // so bring the layer into view first
+      map.fitBounds(rect.getBounds());
       rect.pm.enableRotate();
       rect.pm.enableRotate();
 
@@ -422,12 +425,15 @@ describe('Rotation', () => {
         [1, 2],
         [3, 4],
       ];
-      L.rectangle(coords).addTo(map);
+      const rect = L.rectangle(coords).addTo(map);
       const coords2 = [
         [2, 3],
         [3, 4],
       ];
-      L.rectangle(coords2).addTo(map);
+      const rect2 = L.rectangle(coords2).addTo(map);
+      // edit markers outside the viewport are culled (limitMarkersToViewport),
+      // so bring the layers into view first
+      map.fitBounds(rect.getBounds().extend(rect2.getBounds()));
 
       map.pm.enableGlobalRotateMode();
       map.pm.enableGlobalRotateMode();

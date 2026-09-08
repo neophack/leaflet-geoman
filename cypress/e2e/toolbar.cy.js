@@ -255,6 +255,11 @@ describe('Testing the Toolbar', () => {
       });
       map.pm.Draw.PolygonCopy.setPathOptions({ color: 'red' });
 
+      // the default toolbar is taller than the 500px test map - move the new
+      // custom block to the free top-right corner so its button is visible
+      // without scrolling the map container
+      map.pm.Toolbar.setBlockPosition('custom', 'topright');
+
       cy.toolbarButtonContainer('PolygonCopy', map).then((container) => {
         cy.get(container[0])
           .should('have.attr', 'title')

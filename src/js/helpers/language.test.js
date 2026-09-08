@@ -119,6 +119,18 @@ describe('resolveLanguageCode', () => {
         'en@pirate'
       );
     });
+
+    it('falls back to "en" instead of throwing for null/undefined', () => {
+      // setLang(null) skips the default parameter (defaults only apply to
+      // undefined), so this must not throw
+      expect(resolveLanguageCode(null, mockTranslations)).toBe('en');
+      expect(resolveLanguageCode(undefined, mockTranslations)).toBe('en');
+    });
+
+    it('falls back to "en" instead of throwing for non-string input', () => {
+      expect(resolveLanguageCode(123, mockTranslations)).toBe('en');
+      expect(resolveLanguageCode({}, mockTranslations)).toBe('en');
+    });
   });
 });
 
@@ -168,6 +180,15 @@ describe('parseLanguageCode', () => {
         region: 'hk',
       });
     });
+
+    it('accepts 3-letter region codes (ISO 3166-1 alpha-3)', () => {
+      // 3-letter region codes are valid per ISO 3166-1 alpha-3 (e.g. 'USA'),
+      // not ISO 639-3, which is a language (not region) code standard
+      expect(parseLanguageCode('en-USA')).toEqual({
+        primary: 'en',
+        region: 'usa',
+      });
+    });
   });
 
   describe('invalid codes', () => {
@@ -187,14 +208,6 @@ describe('parseLanguageCode', () => {
     it('returns null for too long codes', () => {
       expect(parseLanguageCode('english')).toBeNull();
       expect(parseLanguageCode('engl-US')).toBeNull(); // 4-letter primary is invalid
-    });
-
-    it('accepts 3-letter region codes (ISO 639-3)', () => {
-      // 3-letter region codes are valid per ISO 639-3
-      expect(parseLanguageCode('en-USA')).toEqual({
-        primary: 'en',
-        region: 'usa',
-      });
     });
 
     it('returns null for non-string', () => {

@@ -6,6 +6,10 @@ describe('Modes', () => {
     cy.window().then(({ map }) => {
       map.pm.setGlobalOptions({
         limitMarkersToCount: -1,
+        // disable the large-layer edit optimizations (issue #366) so that
+        // really every vertex marker is rendered
+        simplifyEditMarkers: 0,
+        limitMarkersToViewport: false,
       });
     });
 
