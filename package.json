@@ -75,7 +75,7 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:unit:coverage": "vitest run --coverage",
-    "test:all": "pnpm run test:unit && pnpm run test",
+    "test:all": "pnpm run lint:check && pnpm run test:unit && pnpm run test",
     "cypress": "cypress open",
     "prepare": "pnpm run build && husky",
     "lint": "oxlint src demo --fix && oxfmt --write src demo",

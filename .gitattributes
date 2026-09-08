@@ -1,0 +1,12 @@
+# Normalize all text files to LF in the repository and on checkout, so
+# `oxfmt --check` behaves identically on every platform (a CRLF working
+# tree makes the formatter report every file as misformatted).
+* text=auto eol=lf
+
+# Binaries
+*.png binary
+*.gif binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
