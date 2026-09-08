@@ -38,7 +38,17 @@ const MarkerLimits = {
     this._layer.off('pm:vertexremoved', this._initMarkers, this);
   },
   createCache() {
-    const allMarkers = [...this._markerGroup.getLayers(), ...this.markerCache];
+    // issue #366: the cache must contain ALL markers, including the ones
+    // currently not attached to the map because of the viewport culling
+    const groupLayers = this._markerGroup.getLayers();
+    let allMarkers = groupLayers;
+    if (this._allEditMarkers) {
+      const detached = this._allEditMarkers.filter(
+        (marker) => !groupLayers.includes(marker) && !marker._pmRemoved
+      );
+      allMarkers = groupLayers.concat(detached);
+    }
+    allMarkers = [...allMarkers, ...this.markerCache];
     this.markerCache = allMarkers.filter((v, i, s) => s.indexOf(v) === i);
   },
   _removeFromCache(marker) {
@@ -73,7 +83,9 @@ const MarkerLimits = {
     const limit = this.options.limitMarkersToCount;
 
     if (limit === -1) {
-      return markers;
+      // no count limit: the viewport culling (issue #366) decides which
+      // markers are attached, keep the current state
+      return this._markerGroup.getLayers();
     }
 
     // sort markers by distance to cursor

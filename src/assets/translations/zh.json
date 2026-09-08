@@ -9,12 +9,18 @@
     "finishRect": "单击完成",
     "startCircle": "单击放置圆心",
     "finishCircle": "单击完成圆形",
-    "placeCircleMarker": "点击放置圆形标记"
+    "placeCircleMarker": "点击放置圆形标记",
+    "drawFreehand": "按住鼠标左键绘制，松开完成",
+    "selectLayersForUnion": "点击两个或多个多边形进行选择，然后点击“合并”",
+    "selectFirstLayerForDifference": "点击要被裁减的多边形",
+    "selectSecondLayerForDifference": "点击用于裁减的多边形",
+    "placePoint": "单击放置点位"
   },
   "actions": {
     "finish": "完成",
     "cancel": "取消",
-    "removeLastVertex": "移除最后的顶点"
+    "removeLastVertex": "移除最后的顶点",
+    "union": "合并"
   },
   "buttonTitles": {
     "drawMarkerButton": "绘制标记",
@@ -29,6 +35,31 @@
     "drawCircleMarkerButton": "画圆圈标记",
     "snappingButton": "将拖动的标记捕捉到其他图层和顶点",
     "pinningButton": "将共享顶点固定在一起",
-    "rotateButton": "旋转图层"
+    "rotateButton": "旋转图层",
+    "splitButton": "分割图层",
+    "lassoButton": "套索选择",
+    "copyButton": "复制图层",
+    "simplifyButton": "一次移除多个顶点",
+    "bringToFrontButton": "图层移到最前",
+    "sendToBackButton": "图层移到最后",
+    "freehandButton": "手绘多边形",
+    "scaleButton": "缩放图层",
+    "unionButton": "合并图层",
+    "differenceButton": "图层求差",
+    "snapGuidesButton": "显示吸附辅助线",
+    "autoTracingButton": "自动描迹线段",
+    "measurementButton": "显示测量结果",
+    "drawPointButton": "绘制点位"
+  },
+  "measurements": {
+    "totalLength": "长度",
+    "segmentLength": "段长度",
+    "area": "面积",
+    "radius": "半径",
+    "perimeter": "周长",
+    "height": "高度",
+    "width": "宽度",
+    "coordinates": "位置",
+    "coordinatesMarker": "位置标记"
   }
 }

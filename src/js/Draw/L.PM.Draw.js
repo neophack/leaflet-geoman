@@ -1,9 +1,11 @@
 import merge from 'lodash/merge';
 import SnapMixin from '../Mixins/Snapping';
+import SnapGuidesMixin from '../Mixins/SnapGuides';
+import GeofencingMixin from '../Mixins/Geofencing';
 import EventMixin from '../Mixins/Events';
 
 const Draw = L.Class.extend({
-  includes: [SnapMixin, EventMixin],
+  includes: [SnapMixin, SnapGuidesMixin, GeofencingMixin, EventMixin],
   options: {
     snappable: true, // TODO: next major Release, rename it to allowSnapping
     snapDistance: 20,
@@ -41,6 +43,13 @@ const Draw = L.Class.extend({
       className: null,
     },
     snapVertex: true,
+    autoTrace: false,
+    snapTo90: false,
+    snapTo90Tolerance: 5,
+    // Geofencing: arrays of other layers the new layer
+    // must not intersect / must be contained within - see Mixins/Geofencing.js
+    preventIntersection: [],
+    requireContainment: [],
   },
   setOptions(options) {
     L.Util.setOptions(this, options);
@@ -49,6 +58,39 @@ const Draw = L.Class.extend({
   setStyle() {},
   getOptions() {
     return this.options;
+  },
+  /**
+   * Measurements: shows a live measurement tooltip at the
+   * cursor while drawing. Called from Events.js#_fireChange on every cursor
+   * move / vertex change with the working latlngs (the cursor position is
+   * already appended for Line / Polygon).
+   */
+  _updateMeasureTooltip(latlngs) {
+    const pm = this._map?.pm;
+    if (
+      !this._hintMarker ||
+      !pm ||
+      typeof pm._measurementsEnabled !== 'function' ||
+      !pm._measurementsEnabled()
+    ) {
+      return;
+    }
+    // Line / Polygon / Cut draws pass the placed vertices plus the cursor
+    // position - measure a throwaway layer of the right type so polygons
+    // close the ring. The other shapes keep `this._layer` up to date on
+    // every move.
+    let workingLayer = this._layer;
+    if (['Line', 'Polygon', 'Cut', 'Freehand'].includes(this._shape)) {
+      if (!Array.isArray(latlngs) || latlngs.length < 2) {
+        return;
+      }
+      workingLayer =
+        this._shape === 'Polygon' ? L.polygon(latlngs) : L.polyline(latlngs);
+    }
+    if (!workingLayer) {
+      workingLayer = this._hintMarker;
+    }
+    pm.showMeasurementTooltip(workingLayer, this._hintMarker, this._shape);
   },
   initialize(map) {
     // Overwriting the default tooltipAnchor of the default Marker Icon, because the tooltip functionality was updated but not the anchor in the Icon
@@ -70,6 +112,10 @@ const Draw = L.Class.extend({
       'Circle',
       'Cut',
       'Text',
+      'Split',
+      'Freehand',
+      'Point',
+      'Lasso',
     ];
 
     // initiate drawing class for our shapes
@@ -139,6 +185,8 @@ const Draw = L.Class.extend({
     // extended to all PM.Draw shapes
     if (this._shape === 'Cut') {
       this._fireGlobalCutModeToggled();
+    } else if (this._shape === 'Split') {
+      this._fireGlobalSplitModeToggled();
     } else {
       this._fireGlobalDrawModeToggled();
     }
@@ -207,6 +255,9 @@ const Draw = L.Class.extend({
       removalMode: 'Removal',
       rotateMode: 'Rotate',
       drawText: 'Text',
+      splitMode: 'Split',
+      drawFreehand: 'Freehand',
+      drawPoint: 'Point',
     };
 
     if (shapeMapping[name]) {

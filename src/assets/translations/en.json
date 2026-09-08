@@ -12,12 +12,18 @@
     "placeCircleMarker": "Click to place circle marker",
     "placeText": "Click to place text",
     "selectFirstLayerFor": "Select first layer for {action}",
-    "selectSecondLayerFor": "Select second layer for {action}"
+    "selectSecondLayerFor": "Select second layer for {action}",
+    "drawFreehand": "Press and hold the left mouse button to draw, release to finish",
+    "selectLayersForUnion": "Click two or more polygons to select them, then press 'Union'",
+    "selectFirstLayerForDifference": "Click the polygon to subtract from",
+    "selectSecondLayerForDifference": "Click the polygon to subtract",
+    "placePoint": "Click to place a point"
   },
   "actions": {
     "finish": "Finish",
     "cancel": "Cancel",
-    "removeLastVertex": "Remove Last Vertex"
+    "removeLastVertex": "Remove Last Vertex",
+    "union": "Union"
   },
   "buttonTitles": {
     "drawMarkerButton": "Draw Marker",
@@ -37,8 +43,17 @@
     "scaleButton": "Scale Layers",
     "autoTracingButton": "Auto trace Line",
     "snapGuidesButton": "Show SnapGuides",
+    "measurementButton": "Show Measurements",
     "unionButton": "Union layers",
-    "differenceButton": "Subtract layers"
+    "differenceButton": "Subtract layers",
+    "splitButton": "Split Layer",
+    "lassoButton": "Lasso Select",
+    "copyButton": "Copy Layer",
+    "simplifyButton": "Remove multiple vertices at once",
+    "bringToFrontButton": "Bring layer to front",
+    "sendToBackButton": "Send layer to back",
+    "freehandButton": "Freehand Draw",
+    "drawPointButton": "Draw Point"
   },
   "measurements": {
     "totalLength": "Length",

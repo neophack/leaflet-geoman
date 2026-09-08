@@ -376,10 +376,15 @@ declare module 'leaflet' {
     once(type: 'pm:cancel', fn: PM.CancelEventHandler): this;
     off(type: 'pm:cancel', fn?: PM.CancelEventHandler): this;
 
-    /** Fired when the layer removing is canceled and the layer is re-added to the map. */
-    on(type: 'pm:undoremove', fn: PM.UndoRemoveEventHandler): this;
-    once(type: 'pm:undoremove', fn: PM.UndoRemoveEventHandler): this;
-    off(type: 'pm:undoremove', fn?: PM.UndoRemoveEventHandler): this;
+    /** Fired when an action was undone via map.pm.undo() or Ctrl+Z. */
+    on(type: 'pm:undo', fn: PM.UndoEventHandler): this;
+    once(type: 'pm:undo', fn: PM.UndoEventHandler): this;
+    off(type: 'pm:undo', fn?: PM.UndoEventHandler): this;
+
+    /** Fired when an undone action was redone via map.pm.redo() or Ctrl+Y. */
+    on(type: 'pm:redo', fn: PM.RedoEventHandler): this;
+    once(type: 'pm:redo', fn: PM.RedoEventHandler): this;
+    off(type: 'pm:redo', fn?: PM.RedoEventHandler): this;
 
     /******************************************
      *
@@ -643,7 +648,7 @@ declare module 'leaflet' {
      *
      ********************************************/
 
-    /** Fired when CopyLayer Mode is toggled. */
+    /** Fired when LineSimplification Mode is toggled. */
     on(
       type: 'pm:globallinesimplificationmodetoggled',
       fn: PM.GlobalLineSimplificationModeToggledEventHandler
@@ -888,7 +893,8 @@ declare module 'leaflet' {
       | PM.IntersectionViolationEventHandler
       | undefined;
     'pm:cancel'?: PM.CancelEventHandler | undefined;
-    'pm:undoremove'?: PM.UndoRemoveEventHandler | undefined;
+    'pm:undo'?: PM.UndoEventHandler | undefined;
+    'pm:redo'?: PM.RedoEventHandler | undefined;
     'pm:update'?: PM.UpdateEventHandler | undefined;
     'pm:enable'?: PM.EnableEventHandler | undefined;
     'pm:disable'?: PM.DisableEventHandler | undefined;
@@ -1037,9 +1043,16 @@ declare module 'leaflet' {
         PMScaleMap,
         PMSelectionMap,
         PMUnionMap,
-        PMLineSimplificationMap,
         PMDifferenceMap,
-        PMLassoMap {
+        PMCopyLayerMap,
+        PMLineSimplificationMap,
+        PMSplitMap,
+        PMBringToFrontMap,
+        PMSendToBackMap,
+        PMLassoMap,
+        PMUndoMap,
+        PMCategoriesMap,
+        PMForkExtensionsMap {
       Toolbar: PMMapToolbar;
 
       Keyboard: PMMapKeyboard;
@@ -1378,6 +1391,51 @@ declare module 'leaflet' {
 
       /** Enable finishing drawing shapes (Line, Polygon, Cut) by pressing the Enter key when enough vertices are placed. Default: false */
       finishOnEnter?: boolean;
+
+      /** Show dashed guide lines (segment / horizontal / vertical) while a vertex snaps. Default: false */
+      showSnapGuides?: boolean;
+
+      /** Angle increments (degrees) the snap guides are drawn at, each as a perpendicular pair through the snap position. Default: [90] */
+      snapGuidesAngles?: number[];
+
+      /** Style of the snap guide lines (Leaflet path options). Default: null */
+      snapGuidesStyle?: L.PathOptions | null;
+
+      /** Trace an existing layer while drawing a Line (Auto-Trace). Default: false */
+      autoTrace?: boolean;
+
+      /** Pin shared vertices/markers together during edit. Default: false */
+      pinning?: boolean;
+
+      /** Simplification tolerance relative to the layer's bounding box diagonal (LineSimplification). Default: 0.003 */
+      simplificationFactor?: number;
+
+      /** Layers with more vertices are rendered simplified & viewport culled while the full geometry is preserved (issue #366). 0 / -1 disables. Default: 1000 */
+      largeLayerThreshold?: number;
+
+      /** Only render edit markers inside the viewport. Default: true */
+      limitMarkersToViewport?: boolean;
+
+      /** Rings with more vertices get a decimated subset of vertex markers while editing. 0 / -1 disables. Default: 100 */
+      simplifyEditMarkers?: number;
+
+      /** Min screen pixels between shown edit markers on simplified rings. Default: 40 */
+      simplifyEditMarkersSpacing?: number;
+
+      /** Hard cap of shown edit markers per ring. Default: 1000 */
+      simplifyEditMarkersMax?: number;
+
+      /** Clicking a layer selects it (every other Geoman layer dims). Default: true */
+      selectableLayers?: boolean;
+
+      /** Highlight style of the selection: 'dim' (default) fades every other layer, 'outline' frames the selected shapes. */
+      selectionEffect?: 'dim' | 'outline';
+
+      /** Line style of the 'outline' selection frames: 'solid' (default) or 'dashed'. */
+      selectionOutlineStyle?: 'solid' | 'dashed';
+
+      /** Enable toolbar hotkeys for the draw/edit tools (M/L/P/R/C/T/F/E/G/X/O/S, Shift+M for CircleMarker, Delete for Removal). Ignored while typing in an input/textarea. Default: false */
+      keyboardShortcuts?: boolean;
     }
 
     interface PMDrawMap {
@@ -1581,8 +1639,8 @@ declare module 'leaflet' {
       /** Returns true if global union mode is enabled. false when disabled. ⭐ */
       globalUnionModeEnabled(): boolean;
 
-      /** Unifies the two layers. ⭐ */
-      union(layer1: L.Layer, layer2: L.Layer): void;
+      /** Unifies the two layers (an array of layers is accepted too). Returns the resulting layer. ⭐ */
+      union(layer1: L.Layer | L.Layer[], layer2?: L.Layer): L.Layer | undefined;
     }
 
     interface PMDifferenceMap {
@@ -1598,8 +1656,11 @@ declare module 'leaflet' {
       /** Returns true if global difference mode is enabled. false when disabled. ⭐ */
       globalDifferenceModeEnabled(): boolean;
 
-      /** Subtracts the second selected layer from the first selected layer. ⭐ */
-      difference(layer1: L.Layer, layer2: L.Layer): void;
+      /** Subtracts the second selected layer from the first selected layer. Returns the resulting layer. ⭐ */
+      difference(
+        layer1: L.Layer,
+        layer2: L.Layer
+      ): L.Layer | null | undefined;
     }
 
     interface PMCopyLayerMap {
@@ -1634,6 +1695,75 @@ declare module 'leaflet' {
 
       /** Reverts the layers to the state before changing. ⭐  */
       cancelGlobalLineSimplificationMode(): void;
+    }
+
+    interface PMUndoMap {
+      /** Undoes the last tracked action (draw, removal, edit, scale, boolean op, order or category change). Returns true when there was something to undo. */
+      undo(): boolean;
+
+      /** Re-applies the last undone action. Returns true when there was something to redo. */
+      redo(): boolean;
+
+      /** Returns true when there is at least one action to undo. */
+      hasUndo(): boolean;
+
+      /** Returns true when there is at least one action to redo. */
+      hasRedo(): boolean;
+
+      /** Caps the undo history at `limit` entries. */
+      setUndoLimit(limit: number): void;
+
+      /** Clears the undo and redo history. */
+      clearUndoRedo(): void;
+    }
+
+    interface PMCategoriesMap {
+      /** Registers (or updates) a category. `options.pathOptions` style every layer of the category. */
+      setCategory(
+        name: string,
+        options?: { pathOptions?: L.PathOptions }
+      ): { pathOptions: L.PathOptions };
+
+      /** Returns all registered categories. */
+      getCategories(): { [name: string]: { pathOptions: L.PathOptions } };
+
+      /** Removes a category registration. */
+      removeCategory(name: string): void;
+
+      /** The category assigned to layers drawn afterwards. Pass undefined / null to clear. */
+      setActiveCategory(name?: string): void;
+
+      /** Returns the active category. */
+      getActiveCategory(): string | undefined;
+
+      /** Clears the active category. */
+      clearActiveCategory(): void;
+
+      /** Returns all Geoman layers of a category. */
+      getLayersByCategory(name: string): L.Layer[];
+    }
+
+    /**
+     * Fork extensions of the map pm API that have no official counterpart.
+     */
+    interface PMForkExtensionsMap {
+      /** Copies a layer with a small offset (same as CopyLayer mode). */
+      copyLayer(layer: L.Layer): L.Layer | undefined;
+
+      /** Simplifies the layer's vertices (Douglas-Peucker). `factor` is relative to the layer's bounding box diagonal. */
+      simplifyLayer(
+        layer: L.Layer,
+        options?: { factor?: number }
+      ): L.Layer | undefined;
+
+      /** Returns the first selected layer (single-selection view of the multi-selection). */
+      getSelectedLayer(): L.Layer | null;
+
+      /** Deselects every selected layer. */
+      unselectAll(): void;
+
+      /** Removes every selected layer in one undoable step (Delete/Backspace shortcut). */
+      removeSelectedLayers(): boolean;
     }
 
     interface PMLassoMap {
@@ -2320,9 +2450,30 @@ declare module 'leaflet' {
         PMEditLayer,
         PMDragLayer,
         PMMeasurementLayer,
-        PMScaleLayer {
+        PMScaleLayer,
+        PMLayerForkExtensions {
       /** Get shape of the layer. */
       getShape(): SUPPORTED_SHAPES;
+    }
+
+    /**
+     * Fork extensions of the layer pm API that have no official counterpart.
+     */
+    interface PMLayerForkExtensions {
+      /** Returns the category of the layer (restored from GeoJSON `properties.pmCategory` when set). */
+      getCategory(): string | undefined;
+
+      /** Assigns a category to the layer and applies the category style. */
+      setCategory(name?: string, options?: { silent?: boolean }): void;
+
+      /** Returns if the layer is currently selected. */
+      isSelected(): boolean;
+
+      /** Adds the layer to the map selection. */
+      select(): void;
+
+      /** Removes the layer from the map selection. */
+      unselect(): void;
     }
 
     interface PMLayerGroup {
@@ -2563,7 +2714,14 @@ declare module 'leaflet' {
       layer: L.Layer;
     }) => void;
     export type CancelEventHandler = (e: BaseEventPayload & { layer: L.Layer }) => void;
-    export type UndoRemoveEventHandler = (e: BaseEventPayload & { layer: L.Layer }) => void;
+    export type UndoEventHandler = (e: BaseEventPayload & {
+      commandType: string;
+      map: L.Map;
+    }) => void;
+    export type RedoEventHandler = (e: BaseEventPayload & {
+      commandType: string;
+      map: L.Map;
+    }) => void;
 
     /**
      * EDIT MODE MAP EVENT HANDLERS
@@ -2753,7 +2911,7 @@ declare module 'leaflet' {
     }) => void;
 
     /**
-     * CopyLayer MODE MAP EVENT HANDLERS
+     * LineSimplification MODE MAP EVENT HANDLERS
      */
     export type GlobalLineSimplificationModeToggledEventHandler = (e: BaseEventPayload & {
       enabled: boolean;
@@ -2769,7 +2927,7 @@ declare module 'leaflet' {
     }) => void;
 
     /**
-     * DIFFERENCE EVENT HANDLERS
+     * LASSO EVENT HANDLERS
      */
     export type LassoSelectEventHandler = (e: BaseEventPayload & {
       lassoCoords: L.LatLng[];

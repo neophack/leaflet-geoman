@@ -11,6 +11,8 @@ Edit.Circle = Edit.CircleMarker.extend({
     this._editableOption = 'resizeableCircle';
     // create polygon around the circle border
     this._updateHiddenPolyCircle();
+
+    this._initSelectionClick();
   },
   enable(options) {
     // TODO: this can be removed after the default options of CircleMarker.enable are removed

@@ -23,6 +23,11 @@ const SnapMixin = {
         return;
       }
 
+      // skip the `{}` placeholders of hidden vertices on simplified rings
+      if (!marker || typeof marker.on !== 'function') {
+        return;
+      }
+
       // add handleSnapping event on drag
       marker.off('drag', this._handleSnapping, this);
       marker.on('drag', this._handleSnapping, this);
@@ -54,6 +59,11 @@ const SnapMixin = {
       this.debugIndicatorLines.forEach((line) => {
         line.remove();
       });
+    }
+
+    // hide the snap guides
+    if (typeof this._hideSnapGuides === 'function') {
+      this._hideSnapGuides();
     }
   },
   _handleThrottleSnapping() {
@@ -148,7 +158,18 @@ const SnapMixin = {
     this._fireSnapDrag(eventInfo.marker, eventInfo);
     this._fireSnapDrag(this._layer, eventInfo);
 
-    if (closestLayer.distance < minDistance) {
+    // don't let the dragged vertex snap onto a position that is already
+    // occupied by another vertex of the same layer - collapsing two
+    // vertices of one shape onto the same point creates a zero-length
+    // edge (e.g. a triangle vertex and a rectangle corner share a
+    // position, and dragging another triangle vertex near it snaps it
+    // exactly onto the shared position). Anchors explicitly registered
+    // via `_otherSnapLayers` (like the first vertex for closing a
+    // polygon) stay snappable.
+    const wouldDuplicateVertex =
+      !selfSnapOnly && this._snapWouldDuplicateVertex(marker, snapLatLng);
+
+    if (closestLayer.distance < minDistance && !wouldDuplicateVertex) {
       // snap the marker
       marker._orgLatLng = marker.getLatLng();
       // TODO: if the origin marker has a altitude is applied to the snapped layer too, do we want this?
@@ -156,6 +177,11 @@ const SnapMixin = {
 
       marker._snapped = true;
       marker._snapInfo = eventInfo;
+
+      // snap guides
+      if (typeof this._updateSnapGuides === 'function') {
+        this._updateSnapGuides(eventInfo);
+      }
 
       const triggerSnap = () => {
         this._snapLatLng = snapLatLng;
@@ -183,7 +209,12 @@ const SnapMixin = {
 
       // and fire unsnap event
       this._fireUnsnap(eventInfo.marker, eventInfo);
-      this._fireUnsnap(this._layer, eventInfo);
+      this._fireUnsnap(eventInfo.layer, eventInfo);
+
+      // hide the snap guides when snapping stops
+      if (typeof this._hideSnapGuides === 'function') {
+        this._hideSnapGuides();
+      }
     }
 
     return true;
@@ -285,7 +316,9 @@ const SnapMixin = {
   _calcClosestLayers(latlng, layers, amount = 1) {
     // the closest polygon to our dragged marker latlng
     let closestLayers = [];
-    let closestLayer = {};
+    // the shortest distance seen so far (kept separate from the entries
+    // pushed into closestLayers, which may be farther-but-tied candidates)
+    let closestDistance;
 
     // loop through the layers
     layers.forEach((layer, index) => {
@@ -315,19 +348,26 @@ const SnapMixin = {
       // save the info if it doesn't exist or if the distance is smaller than the previous one
       if (
         amount === 1 &&
-        (closestLayer.distance === undefined ||
-          results.distance - 5 <= closestLayer.distance)
+        (closestDistance === undefined ||
+          results.distance - 5 <= closestDistance)
       ) {
-        // if the layer is less then 5 pixels away, we treat it as same distance and sort it based on priority
-        if (results.distance + 5 < closestLayer.distance) {
-          closestLayers = [];
+        // if a new true minimum is found, drop any accumulated candidates
+        // that are no longer within the 5px tie-tolerance of it
+        if (
+          closestDistance === undefined ||
+          results.distance < closestDistance
+        ) {
+          closestDistance = results.distance;
+          closestLayers = closestLayers.filter(
+            (l) => l.distance - closestDistance <= 5
+          );
         }
-        closestLayer = results;
+        // if the layer is less then 5 pixels away, we treat it as same distance and sort it based on priority
+        const closestLayer = results;
         closestLayer.layer = layer;
         closestLayers.push(closestLayer);
       } else if (amount !== 1) {
-        closestLayer = {};
-        closestLayer = results;
+        const closestLayer = results;
         closestLayer.layer = layer;
         closestLayers.push(closestLayer);
       }
@@ -432,7 +472,7 @@ const SnapMixin = {
 
     loopThroughCoords(latlngs);
 
-    if (this.options.snapSegment) {
+    if (this.options.snapSegment && closestSegment) {
       // now, take the closest segment (closestSegment) and calc the closest point to latlng on it.
       const C = this._getClosestPointOnSegment(
         map,
@@ -448,7 +488,20 @@ const SnapMixin = {
         distance: shortestDistance,
       };
     }
-    // Only snap on the coords
+    // Only snap on the coords (also the fallback for a multi-part shape
+    // where every part has fewer than 2 points, so no A-B segment exists)
+    if (closestCoord === undefined) {
+      latlngs.flat(Infinity).forEach((coord) => {
+        const distancePoint = this._getDistance(map, latlng, coord);
+        if (
+          shortestDistance === undefined ||
+          distancePoint < shortestDistance
+        ) {
+          shortestDistance = distancePoint;
+          closestCoord = coord;
+        }
+      });
+    }
     // return the closest coord
     return {
       latlng: closestCoord,
@@ -541,6 +594,53 @@ const SnapMixin = {
   _unsnap() {
     // delete the last snap
     delete this._snapLatLng;
+  },
+  /**
+   * Whether snapping `marker` to `snapLatLng` would place it onto a vertex
+   * that already exists in the dragged layer itself (the dragged marker's
+   * own position doesn't count). Anchors registered in `_otherSnapLayers`
+   * (e.g. the first vertex used to close a polygon) are always allowed.
+   */
+  _snapWouldDuplicateVertex(marker, snapLatLng) {
+    const layer = this._layer;
+    if (!layer || !snapLatLng) {
+      return false;
+    }
+    if (
+      this._otherSnapLayers &&
+      this._otherSnapLayers.some(
+        (snapLayer) =>
+          snapLayer &&
+          snapLayer.getLatLng &&
+          snapLayer.getLatLng().equals(snapLatLng)
+      )
+    ) {
+      return false;
+    }
+    const latlngs = layer.getLatLngs
+      ? layer.getLatLngs()
+      : [layer.getLatLng()].filter(Boolean);
+
+    let duplicate = false;
+    const checkCoords = (coords) => {
+      coords.forEach((coord) => {
+        if (Array.isArray(coord)) {
+          checkCoords(coord);
+          return;
+        }
+        if (
+          !duplicate &&
+          coord &&
+          coord.equals &&
+          coord.equals(snapLatLng) &&
+          !coord.equals(marker.getLatLng())
+        ) {
+          duplicate = true;
+        }
+      });
+    };
+    checkCoords(latlngs);
+    return duplicate;
   },
   _getClosestPointOnSegment(map, latlng, latlngA, latlngB) {
     let maxzoom = map.getMaxZoom();

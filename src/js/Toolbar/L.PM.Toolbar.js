@@ -4,6 +4,26 @@ import { getTranslation } from '../helpers';
 
 L.Control.PMButton = PMButton;
 
+// Toolbar hotkeys shown as a tooltip suffix while the `keyboardShortcuts`
+// global option is on - see Mixins/Keyboard.js#_handleToolShortcut for the
+// matching keydown handling.
+const SHORTCUT_KEY_LABELS = {
+  drawMarker: 'M',
+  drawCircleMarker: 'Shift+M',
+  drawPolyline: 'L',
+  drawPolygon: 'P',
+  drawRectangle: 'R',
+  drawCircle: 'C',
+  drawText: 'T',
+  drawFreehand: 'F',
+  editMode: 'E',
+  dragMode: 'G',
+  cutPolygon: 'X',
+  removalMode: 'Delete',
+  rotateMode: 'O',
+  scaleMode: 'S',
+};
+
 const Toolbar = L.Class.extend({
   options: {
     drawMarker: true,
@@ -19,6 +39,23 @@ const Toolbar = L.Class.extend({
     removalMode: true,
     rotateMode: true,
     snappingOption: true,
+    // Feature defaults: split / scale / union and the option toggles are on,
+    // the rest is off
+    unionMode: true,
+    differenceMode: false,
+    splitMode: true,
+    scaleMode: true,
+    lassoMode: false,
+    copyLayerMode: false,
+    lineSimplificationMode: false,
+    bringToFrontMode: false,
+    sendToBackMode: false,
+    drawFreehand: false,
+    drawPoint: false,
+    pinningOption: true,
+    snapGuidesOption: true,
+    autoTracingOption: true,
+    measurementOption: false,
     drawControls: true,
     editControls: true,
     optionsControls: true,
@@ -54,6 +91,29 @@ const Toolbar = L.Class.extend({
     if (addControls) {
       this.addControls();
     }
+
+    this.updateShortcutHints();
+  },
+  /**
+   * Appends the assigned hotkey to the title (tooltip) of every toolbar
+   * button in SHORTCUT_KEY_LABELS while `keyboardShortcuts` is enabled, or
+   * restores the plain translated title when it's off.
+   */
+  updateShortcutHints() {
+    const enabled = !!this.map.pm.getGlobalOptions().keyboardShortcuts;
+    Object.keys(SHORTCUT_KEY_LABELS).forEach((name) => {
+      const button = this.buttons[name];
+      if (!button) {
+        return;
+      }
+      if (button._baseTitle === undefined) {
+        button._baseTitle = button._button.title || '';
+      }
+      const key = SHORTCUT_KEY_LABELS[name];
+      button.setTitle(
+        enabled ? `${button._baseTitle} (${key})` : button._baseTitle
+      );
+    });
   },
   init(map) {
     this.map = map;
@@ -112,6 +172,8 @@ const Toolbar = L.Class.extend({
     this.isVisible = true;
     // now show the specified buttons
     this._showHideButtons();
+    // re-apply the boolean-family presentation after the reset above
+    this._updateBooleanFamilyPresentation();
   },
   applyIconStyle() {
     const buttons = this.getButtons();
@@ -129,6 +191,22 @@ const Toolbar = L.Class.extend({
         cutPolygon: 'control-icon leaflet-pm-icon-cut',
         removalMode: 'control-icon leaflet-pm-icon-delete',
         drawText: 'control-icon leaflet-pm-icon-text',
+        unionMode: 'control-icon leaflet-pm-icon-union',
+        differenceMode: 'control-icon leaflet-pm-icon-difference',
+        splitMode: 'control-icon leaflet-pm-icon-split',
+        scaleMode: 'control-icon leaflet-pm-icon-scale',
+        lassoMode: 'control-icon leaflet-pm-icon-lasso',
+        copyLayerMode: 'control-icon leaflet-pm-icon-copy',
+        lineSimplificationMode: 'control-icon leaflet-pm-icon-simplify',
+        bringToFrontMode: 'control-icon leaflet-pm-icon-front',
+        sendToBackMode: 'control-icon leaflet-pm-icon-back',
+        drawFreehand: 'control-icon leaflet-pm-icon-freehand',
+        drawPoint: 'control-icon leaflet-pm-icon-point',
+        snappingOption: 'control-icon leaflet-pm-icon-snapping',
+        pinningOption: 'control-icon leaflet-pm-icon-pin',
+        snapGuidesOption: 'control-icon leaflet-pm-icon-snapguides',
+        autoTracingOption: 'control-icon leaflet-pm-icon-autotrace',
+        measurementOption: 'control-icon leaflet-pm-icon-measurement',
       },
     };
 
@@ -186,6 +264,83 @@ const Toolbar = L.Class.extend({
       ) {
         button._triggerClick();
       }
+    }
+  },
+  /**
+   * Switches from one linked mode to another (e.g. the
+   * subtract action inside the union button): disables the currently active
+   * mode and enables the mode `name` (a registered toolbar button name).
+   * Works in both directions - union -> subtract and subtract -> union.
+   */
+  _switchModeAction(name) {
+    const target = this.buttons[name];
+    if (!target) {
+      return;
+    }
+    // the linked boolean modes share the union slot, so the slot's toggle
+    // state can't tell which of the two modes is active - check the modes
+    // themselves and switch through their APIs (the enable guards move the
+    // slot state and presentation over)
+    if (name === 'unionMode' || name === 'differenceMode') {
+      const active =
+        name === 'unionMode'
+          ? this.map.pm.globalUnionModeEnabled &&
+            this.map.pm.globalUnionModeEnabled()
+          : this.map.pm.globalDifferenceModeEnabled &&
+            this.map.pm.globalDifferenceModeEnabled();
+      if (!active) {
+        if (name === 'unionMode') {
+          this.map.pm.toggleGlobalUnionMode();
+        } else {
+          this.map.pm.toggleGlobalDifferenceMode();
+        }
+      }
+      return;
+    }
+    this.triggerClickOnToggledButtons(target);
+    if (!target.toggled()) {
+      if (target._button.afterClick) {
+        // invoke the mode toggle without clicking the button itself: clicking
+        // would flip the linked button's toggle state, but the visible slot
+        // keeps exclusive ownership of that state
+        target._button.afterClick(null, { button: target, event: null });
+      } else {
+        target._triggerClick();
+      }
+    }
+  },
+  /**
+   * Official behavior: the toolbar has one slot for the linked boolean
+   * modes. While difference mode is active the union slot shows the Subtract
+   * icon / title and offers the union action to switch back; when the mode
+   * is off the default Union presentation is restored.
+   */
+  _updateBooleanFamilyPresentation() {
+    const unionBtn = this.buttons.unionMode;
+    const differenceBtn = this.buttons.differenceMode;
+    if (!unionBtn || !differenceBtn) {
+      return;
+    }
+    const differenceActive = !!(
+      this.map &&
+      this.map.pm &&
+      this.map.pm.globalDifferenceModeEnabled &&
+      this.map.pm.globalDifferenceModeEnabled()
+    );
+    const base = (differenceActive ? differenceBtn : unionBtn)._button
+      ._familyBase;
+    if (!base) {
+      return;
+    }
+    const changed =
+      unionBtn._button.className !== base.className ||
+      unionBtn._button.title !== base.title ||
+      unionBtn._button.actions !== base.actions;
+    unionBtn._button.className = base.className;
+    unionBtn._button.actions = base.actions;
+    unionBtn.setTitle(base.title);
+    if (changed && unionBtn.buttonsDomNode) {
+      unionBtn._renderButton();
     }
   },
   toggleButton(name, status, disableOthers = true) {
@@ -410,6 +565,280 @@ const Toolbar = L.Class.extend({
       actions: ['cancel'],
     };
 
+    const unionButton = {
+      title: getTranslation('buttonTitles.unionButton'),
+      className: 'control-icon leaflet-pm-icon-union',
+      onClick: () => {},
+      afterClick: () => {
+        // the slot hosts both linked boolean modes:
+        // while difference mode is active, clicking it turns difference off
+        // instead of starting union
+        if (
+          this.map.pm.globalDifferenceModeEnabled &&
+          this.map.pm.globalDifferenceModeEnabled()
+        ) {
+          this.map.pm.disableGlobalDifferenceMode();
+        } else {
+          this.map.pm.toggleGlobalUnionMode();
+        }
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      // switching action to the Subtract mode
+      actions: ['differenceMode', 'cancel'],
+    };
+
+    const differenceButton = {
+      title: getTranslation('buttonTitles.differenceButton'),
+      className: 'control-icon leaflet-pm-icon-difference',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalDifferenceMode();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['unionMode', 'cancel'],
+    };
+
+    const splitButton = {
+      title: getTranslation('buttonTitles.splitButton'),
+      className: 'control-icon leaflet-pm-icon-split',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalSplitMode({
+          snappable: true,
+          cursorMarker: true,
+          allowSelfIntersection: false,
+        });
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['finish', 'removeLastVertex', 'cancel'],
+    };
+
+    const scaleButton = {
+      title: getTranslation('buttonTitles.scaleButton'),
+      className: 'control-icon leaflet-pm-icon-scale',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalScaleMode();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['finishMode'],
+    };
+
+    const lassoButton = {
+      title: getTranslation('buttonTitles.lassoButton'),
+      className: 'control-icon leaflet-pm-icon-lasso',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalLassoMode();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['finishMode'],
+    };
+
+    const copyLayerButton = {
+      title: getTranslation('buttonTitles.copyButton'),
+      className: 'control-icon leaflet-pm-icon-copy',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalCopyLayerMode();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['finishMode'],
+    };
+
+    const simplifyButton = {
+      title: getTranslation('buttonTitles.simplifyButton'),
+      className: 'control-icon leaflet-pm-icon-simplify',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalLineSimplificationMode();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['finishMode'],
+    };
+
+    const bringToFrontButton = {
+      title: getTranslation('buttonTitles.bringToFrontButton'),
+      className: 'control-icon leaflet-pm-icon-front',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalBringToFrontMode();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['sendToBackMode', 'cancel'],
+    };
+
+    const sendToBackButton = {
+      title: getTranslation('buttonTitles.sendToBackButton'),
+      className: 'control-icon leaflet-pm-icon-back',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.toggleGlobalSendToBackMode();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      tool: 'edit',
+      actions: ['bringToFrontMode', 'cancel'],
+    };
+
+    const drawFreehandButton = {
+      title: getTranslation('buttonTitles.freehandButton'),
+      className: 'control-icon leaflet-pm-icon-freehand',
+      jsClass: 'Freehand',
+      onClick: () => {},
+      afterClick: (e, ctx) => {
+        // toggle drawing mode
+        this.map.pm.Draw[ctx.button._button.jsClass].toggle();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      actions: ['cancel'],
+    };
+
+    const drawPointButton = {
+      title: getTranslation('buttonTitles.drawPointButton'),
+      className: 'control-icon leaflet-pm-icon-point',
+      jsClass: 'Point',
+      onClick: () => {},
+      afterClick: (e, ctx) => {
+        // toggle drawing mode
+        this.map.pm.Draw[ctx.button._button.jsClass].toggle();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: true,
+      position: this.options.position,
+      actions: ['cancel'],
+    };
+
+    // option toggles live in the options block and don't disable other modes
+    const snappingOptionButton = {
+      title: getTranslation('buttonTitles.snappingButton'),
+      className: 'control-icon leaflet-pm-icon-snapping',
+      onClick: () => {},
+      afterClick: () => {
+        const snappable = !this.map.pm.getGlobalOptions().snappable;
+        this.map.pm.setGlobalOptions({ snappable });
+      },
+      doToggle: true,
+      toggleStatus: true, // globalOptions.snappable defaults to true
+      disableOtherButtons: false,
+      disableByOtherButtons: false,
+      position: this.options.position,
+      tool: 'options',
+      actions: [],
+    };
+
+    const pinningOptionButton = {
+      title: getTranslation('buttonTitles.pinningButton'),
+      className: 'control-icon leaflet-pm-icon-pin',
+      onClick: () => {},
+      afterClick: () => {
+        this.map.pm.togglePinning();
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: false,
+      disableByOtherButtons: false,
+      position: this.options.position,
+      tool: 'options',
+      actions: [],
+    };
+
+    const snapGuidesOptionButton = {
+      title: getTranslation('buttonTitles.snapGuidesButton'),
+      className: 'control-icon leaflet-pm-icon-snapguides',
+      onClick: () => {},
+      afterClick: () => {
+        const showSnapGuides = !this.map.pm.getGlobalOptions().showSnapGuides;
+        this.map.pm.setGlobalOptions({ showSnapGuides });
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: false,
+      disableByOtherButtons: false,
+      position: this.options.position,
+      tool: 'options',
+      actions: [],
+    };
+
+    const autoTracingOptionButton = {
+      title: getTranslation('buttonTitles.autoTracingButton'),
+      className: 'control-icon leaflet-pm-icon-autotrace',
+      onClick: () => {},
+      afterClick: () => {
+        const autoTrace = !this.map.pm.getGlobalOptions().autoTrace;
+        this.map.pm.setGlobalOptions({ autoTrace });
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: false,
+      disableByOtherButtons: false,
+      position: this.options.position,
+      tool: 'options',
+      actions: [],
+    };
+
+    const measurementOptionButton = {
+      title: getTranslation('buttonTitles.measurementButton'),
+      className: 'control-icon leaflet-pm-icon-measurement',
+      onClick: () => {},
+      afterClick: () => {
+        const { measurements } = this.map.pm.getGlobalOptions();
+        this.map.pm.setGlobalOptions({
+          measurements: {
+            ...measurements,
+            measurement: !measurements.measurement,
+          },
+        });
+      },
+      doToggle: true,
+      toggleStatus: false,
+      disableOtherButtons: false,
+      disableByOtherButtons: false,
+      position: this.options.position,
+      tool: 'options',
+      actions: [],
+    };
+
+    // registration order = rendering order (draw block, edit block,
+    // options block)
     this._addButton('drawMarker', new L.Control.PMButton(drawMarkerButton));
     this._addButton('drawPolyline', new L.Control.PMButton(drawLineButton));
     this._addButton('drawRectangle', new L.Control.PMButton(drawRectButton));
@@ -425,6 +854,56 @@ const Toolbar = L.Class.extend({
     this._addButton('cutPolygon', new L.Control.PMButton(cutButton));
     this._addButton('removalMode', new L.Control.PMButton(deleteButton));
     this._addButton('rotateMode', new L.Control.PMButton(rotateButton));
+    this._addButton('drawFreehand', new L.Control.PMButton(drawFreehandButton));
+    this._addButton('drawPoint', new L.Control.PMButton(drawPointButton));
+    this._addButton('lassoMode', new L.Control.PMButton(lassoButton));
+    this._addButton('splitMode', new L.Control.PMButton(splitButton));
+    this._addButton('scaleMode', new L.Control.PMButton(scaleButton));
+    this._addButton('unionMode', new L.Control.PMButton(unionButton));
+    this._addButton('differenceMode', new L.Control.PMButton(differenceButton));
+    // base presentation of the two linked boolean-mode buttons: while
+    // difference mode is active the union slot shows the Subtract
+    // presentation, so the defaults are kept for switching back
+    this.buttons.unionMode._button._familyBase = {
+      className: unionButton.className,
+      title: unionButton.title,
+      actions: unionButton.actions,
+    };
+    this.buttons.differenceMode._button._familyBase = {
+      className: differenceButton.className,
+      title: differenceButton.title,
+      actions: differenceButton.actions,
+    };
+    this._addButton(
+      'bringToFrontMode',
+      new L.Control.PMButton(bringToFrontButton)
+    );
+    this._addButton('sendToBackMode', new L.Control.PMButton(sendToBackButton));
+    this._addButton('copyLayerMode', new L.Control.PMButton(copyLayerButton));
+    this._addButton(
+      'lineSimplificationMode',
+      new L.Control.PMButton(simplifyButton)
+    );
+    this._addButton(
+      'pinningOption',
+      new L.Control.PMButton(pinningOptionButton)
+    );
+    this._addButton(
+      'snappingOption',
+      new L.Control.PMButton(snappingOptionButton)
+    );
+    this._addButton(
+      'autoTracingOption',
+      new L.Control.PMButton(autoTracingOptionButton)
+    );
+    this._addButton(
+      'snapGuidesOption',
+      new L.Control.PMButton(snapGuidesOptionButton)
+    );
+    this._addButton(
+      'measurementOption',
+      new L.Control.PMButton(measurementOptionButton)
+    );
   },
 
   _showHideButtons() {
@@ -715,6 +1194,9 @@ const Toolbar = L.Class.extend({
       Removal: 'removalMode',
       Rotate: 'rotateMode',
       Text: 'drawText',
+      Split: 'splitMode',
+      Freehand: 'drawFreehand',
+      Point: 'drawPoint',
     };
   },
   _btnNameMapping(name) {

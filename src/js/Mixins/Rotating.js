@@ -165,6 +165,15 @@ const RotateMixin = {
       );
     }
 
+    // a large layer is rendered with a decimated/culled subset - rotate the
+    // full geometry instead (issue #366). Only resume on disable when the
+    // rotation itself suspended the optimization.
+    const optimizeState = this._layer._pmOptimize;
+    if (optimizeState && !optimizeState.suspended) {
+      this._layer._map?.pm?._suspendOptimization?.(this._layer);
+      this._rotateResumesOptimization = true;
+    }
+
     // We create an hidden polygon. We set pmIgnore to false, so that the `pm` property will be always create, also if OptIn == true
     const options = {
       fill: false,
@@ -217,6 +226,11 @@ const RotateMixin = {
 
       this._rotateEnabled = false;
 
+      if (this._rotateResumesOptimization) {
+        this._rotateResumesOptimization = false;
+        this._layer._map?.pm?._resumeOptimization?.(this._layer);
+      }
+
       this._fireRotationDisable(this._layer);
       // we need to use this._layer._map because this._map can be undefined if layer was never enabled for editing before
       this._fireRotationDisable(this._layer._map);
@@ -227,6 +241,14 @@ const RotateMixin = {
   },
   // angle is clockwise (0-360)
   rotateLayer(degrees) {
+    // rotate the full geometry of an optimized large layer (issue #366)
+    const pm = this._layer._map?.pm;
+    const optimizeState = this._layer._pmOptimize;
+    const resumeOptimization = optimizeState && !optimizeState.suspended;
+    if (resumeOptimization) {
+      pm?._suspendOptimization?.(this._layer);
+    }
+
     const oldAngle = this.getAngle();
     const oldLatLngs = this._layer.getLatLngs();
     const rads = degrees * (Math.PI / 180);
@@ -273,6 +295,12 @@ const RotateMixin = {
     );
     delete this._startAngle;
     this._fireChange(this._layer.getLatLngs(), 'Rotation');
+    // make programmatic rotations undoable like interactive ones
+    this._fireEdit(this._layer, 'Rotation');
+
+    if (resumeOptimization) {
+      pm?._resumeOptimization?.(this._layer);
+    }
   },
   rotateLayerToAngle(degrees) {
     const newAnlge = degrees - this.getAngle();

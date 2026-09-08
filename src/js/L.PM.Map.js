@@ -4,6 +4,19 @@ import GlobalEditMode from './Mixins/Modes/Mode.Edit';
 import GlobalDragMode from './Mixins/Modes/Mode.Drag';
 import GlobalRemovalMode from './Mixins/Modes/Mode.Removal';
 import GlobalRotateMode from './Mixins/Modes/Mode.Rotate';
+import GlobalUnionMode from './Mixins/Modes/Mode.Union';
+import GlobalDifferenceMode from './Mixins/Modes/Mode.Difference';
+import GlobalScaleMode from './Mixins/Modes/Mode.Scale';
+import GlobalLassoMode from './Mixins/Modes/Mode.Lasso';
+import GlobalCopyLayerMode from './Mixins/Modes/Mode.Copy';
+import GlobalLineSimplificationMode from './Mixins/Modes/Mode.Simplify';
+import GlobalOrderMode from './Mixins/Modes/Mode.Order';
+import { MapPinningMixin } from './Mixins/Pinning';
+import UndoMixin from './Mixins/Undo';
+import MeasurementsMixin from './Mixins/Measurements';
+import CategoriesMixin from './Mixins/Categories';
+import SelectionMixin from './Mixins/Selection';
+import LargeLayerRendering from './Mixins/LargeLayerRendering';
 import EventMixin from './Mixins/Events';
 import createKeyboardMixins from './Mixins/Keyboard';
 import { getRenderer } from './helpers';
@@ -15,6 +28,19 @@ const Map = L.Class.extend({
     GlobalDragMode,
     GlobalRemovalMode,
     GlobalRotateMode,
+    GlobalUnionMode,
+    GlobalDifferenceMode,
+    GlobalScaleMode,
+    GlobalLassoMode,
+    GlobalCopyLayerMode,
+    GlobalLineSimplificationMode,
+    GlobalOrderMode,
+    MapPinningMixin,
+    UndoMixin,
+    MeasurementsMixin,
+    CategoriesMixin,
+    SelectionMixin,
+    LargeLayerRendering,
     EventMixin,
   ],
   initialize(map) {
@@ -42,9 +68,70 @@ const Map = L.Class.extend({
       draggable: true,
       exitModeOnEscape: false,
       finishOnEnter: false,
+      // toolbar hotkeys for the draw/edit tools (M/L/P/R/C/T/F/E/G/X/O/S,
+      // Shift+M, Delete) - see Mixins/Keyboard.js#_handleToolShortcut.
+      // Default off so existing consumers aren't surprised by letter keys
+      // suddenly activating a tool.
+      keyboardShortcuts: false,
+      showSnapGuides: false,
+      // angle increments (degrees) the snap guides are drawn at, each as a
+      // perpendicular pair through the snap position - e.g. 90 draws a
+      // horizontal + vertical cross, 45 a diagonal cross
+      snapGuidesAngles: [90],
+      snapGuidesStyle: null,
+      autoTrace: false,
+      simplificationFactor: 0.003,
+      // Measurements: `measurement` toggles the display,
+      // the other flags select the shown rows / unit system. The boolean
+      // `showMeasurements` is kept as a legacy alias for
+      // `measurements.measurement`.
+      measurements: {
+        measurement: false,
+        showTooltip: true,
+        showTooltipOnHover: true,
+        totalLength: true,
+        segmentLength: true,
+        area: true,
+        radius: true,
+        perimeter: true,
+        height: true,
+        width: true,
+        coordinates: true,
+        displayFormat: 'metric',
+      },
+      // pins shared vertices/markers together during edit - see Mixins/Pinning.js
+      pinning: false,
+      limitMarkersToViewport: true,
+      // layers with more vertices are rendered simplified & viewport culled
+      // (issue #366). Set to 0 or -1 to disable
+      largeLayerThreshold: 1000,
+      // rings with more vertices than this only get a decimated subset of
+      // editable vertex markers; hidden vertices follow the drag weighted
+      // by their path distance on the line. Set to 0 or -1 to disable
+      simplifyEditMarkers: 100,
+      // min screen pixels between shown edit markers on simplified rings -
+      // zoom in for more (finer) edit markers, out for fewer
+      simplifyEditMarkersSpacing: 40,
+      // hard cap of shown edit markers per ring on the deepest zoom
+      simplifyEditMarkersMax: 1000,
+      // clicking a layer selects it, fading every other Geoman-tracked
+      // layer to 40% opacity - see Mixins/Selection.js
+      selectableLayers: true,
+      // highlight style of the selection: 'dim' (default, every other layer
+      // fades to 40% opacity) or 'outline' (black frame around each
+      // selected shape, nothing is dimmed)
+      selectionEffect: 'dim',
+      // line style of the 'outline' selection frames: 'solid' (default) or
+      // 'dashed' - only affects the frames, never the layers themselves
+      selectionOutlineStyle: 'solid',
     };
 
     this.Keyboard._initKeyListener(map);
+    this._initUndoRedo();
+    this._initMeasurements();
+    this._initCategories();
+    this._initSelection();
+    this._initLargeLayerRendering();
   },
 
   setLang(lang = 'en', override, fallback = 'en') {
@@ -156,11 +243,64 @@ const Map = L.Class.extend({
 
     this.map.fire('pm:globaloptionschanged');
 
-    // store options
+    // store options (before the handlers below - they read
+    // `this.globalOptions` to apply the new state)
     this.globalOptions = options;
+
+    // Measurements: apply the new state to all existing layers. The boolean
+    // `showMeasurements` is a legacy alias for `measurements.measurement`.
+    if (o && ('measurements' in o || 'showMeasurements' in o)) {
+      if ('showMeasurements' in o) {
+        options.measurements = merge({}, options.measurements, {
+          measurement: !!options.showMeasurements,
+        });
+        delete options.showMeasurements;
+        this.globalOptions = options;
+      }
+      this.Toolbar.toggleButton(
+        'measurementOption',
+        !!options.measurements.measurement,
+        false
+      );
+      L.PM.Utils.findLayers(this.map).forEach((layer) => {
+        this._updateLayerMeasurement(layer);
+      });
+    }
+
+    // Pinning: keep the toolbar button in sync when toggled via setGlobalOptions
+    // directly (e.g. `setGlobalOptions({ pinning: true })`)
+    // rather than through enablePinning()/togglePinning()
+    if (o && 'pinning' in o) {
+      this.Toolbar.toggleButton('pinningOption', !!options.pinning, false);
+    }
+
+    // Selection effect: re-apply the configured highlight ('dim' or
+    // 'outline') to the layers that are currently selected
+    if (o && 'selectionEffect' in o) {
+      this._applySelectionEffect();
+    }
+
+    // Selection outline line style: re-apply so the current frames switch
+    // between solid and dashed
+    if (o && 'selectionOutlineStyle' in o) {
+      this._applySelectionEffect();
+    }
+
+    // SnapGuides: keep the toolbar button in sync when toggled via
+    // setGlobalOptions directly rather than through the toolbar button
+    if (o && 'showSnapGuides' in o) {
+      this.Toolbar.toggleButton(
+        'snapGuidesOption',
+        !!options.showSnapGuides,
+        false
+      );
+    }
 
     // apply the options (actually trigger the functionality)
     this.applyGlobalOptions();
+
+    // reflect keyboardShortcuts on/off in the toolbar buttons' tooltips
+    this.Toolbar.updateShortcutHints();
   },
   applyGlobalOptions() {
     const layers = L.PM.Utils.findLayers(this.map);
@@ -184,6 +324,18 @@ const Map = L.Class.extend({
   },
   disableGlobalCutMode() {
     return this.Draw.Cut.disable();
+  },
+  globalSplitModeEnabled() {
+    return !!this.Draw.Split.enabled();
+  },
+  enableGlobalSplitMode(options) {
+    return this.Draw.Split.enable(options);
+  },
+  toggleGlobalSplitMode(options) {
+    return this.Draw.Split.toggle(options);
+  },
+  disableGlobalSplitMode() {
+    return this.Draw.Split.disable();
   },
   getGeomanLayers(asGroup = false) {
     const layers = L.PM.Utils.findLayers(this.map);

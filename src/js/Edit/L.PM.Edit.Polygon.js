@@ -6,6 +6,12 @@ Edit.Polygon = Edit.Line.extend({
   _checkMarkerAllowedToDrag(marker) {
     const { prevMarker, nextMarker } = this._getNeighborMarkers(marker);
 
+    // neighbors are `{}` placeholders on a simplified ring (issue #366) -
+    // there's no real edge to check, so don't block the drag
+    if (!prevMarker || !nextMarker) {
+      return true;
+    }
+
     const prevLine = L.polyline([prevMarker.getLatLng(), marker.getLatLng()]);
     const nextLine = L.polyline([marker.getLatLng(), nextMarker.getLatLng()]);
 

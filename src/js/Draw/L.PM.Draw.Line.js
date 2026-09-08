@@ -186,6 +186,9 @@ Draw.Line = Draw.extend({
       this._handleSnapping(fakeDragEvent, true);
     }
 
+    // Geoman feature (issue #559): snap the segment to 90 degree multiples
+    this._handleSnapTo90();
+
     // if self-intersection is forbidden, handle it
     if (!this.options.allowSelfIntersection) {
       this._handleSelfIntersection(true, this._hintMarker.getLatLng());
@@ -193,6 +196,51 @@ Draw.Line = Draw.extend({
     const latlngs = this._layer._defaultShape().slice();
     latlngs.push(this._hintMarker.getLatLng());
     this._change(latlngs);
+  },
+  /**
+   * Snaps the current drawing direction to multiples of 90° (relative to the
+   * last vertex) when the cursor is close to such an angle. Real snapping
+   * (to other layers) always wins.
+   */
+  _handleSnapTo90() {
+    if (!this.options.snapTo90 || this._hintMarker._snapped) {
+      return;
+    }
+    const latlngs = this._layer.getLatLngs();
+    if (!latlngs || latlngs.length === 0) {
+      return;
+    }
+    const last = latlngs[latlngs.length - 1];
+    const hint = this._hintMarker.getLatLng();
+
+    const rad = Math.PI / 180;
+    // x axis scaled by cos(lat) so angles are metrically correct
+    const kx = Math.cos(((last.lat + hint.lat) / 2) * rad) || 1e-9;
+    const dx = (hint.lng - last.lng) * kx;
+    const dy = hint.lat - last.lat;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 1e-12) {
+      return;
+    }
+
+    // angle clockwise from north
+    let angle = Math.atan2(dx, dy) / rad;
+    if (angle < 0) {
+      angle += 360;
+    }
+    const nearest = Math.round(angle / 90) * 90;
+    const tolerance = this.options.snapTo90Tolerance ?? 5;
+    if (Math.abs(angle - nearest) > tolerance) {
+      return;
+    }
+
+    // keep the distance to the last vertex, snap the direction
+    const direction = (nearest % 360) * rad;
+    const ndy = Math.cos(direction);
+    const ndx = Math.sin(direction);
+    this._hintMarker.setLatLng(
+      L.latLng(last.lat + ndy * dist, last.lng + (ndx * dist) / kx)
+    );
   },
   hasSelfIntersection() {
     // check for self intersection of the layer and return true/false
@@ -248,6 +296,13 @@ Draw.Line = Draw.extend({
       }
     }
 
+    // Geofencing: don't place a vertex that would violate
+    // preventIntersection / requireContainment (kept in sync by
+    // _checkGeofencing, run on every cursor move via _fireChange)
+    if (this._geofenceViolation) {
+      return;
+    }
+
     // assign the coordinate of the click to the hintMarker, that's necessary for
     // mobile where the marker can't follow a cursor
     if (!this._hintMarker._snapped) {
@@ -281,6 +336,17 @@ Draw.Line = Draw.extend({
       snapInfo: this._hintMarker._snapInfo,
     });
 
+    // auto trace
+    // when the vertex was snapped to a segment of another layer, insert the
+    // endpoints of that segment, so the border between them is traced
+    if (this.options.autoTrace) {
+      const tracedLatLngs = this._getAutoTraceLatLngs(latlng, lastLatLng);
+      tracedLatLngs.forEach((traceLatLng) => {
+        this._layer.addLatLng(traceLatLng);
+        this._createMarker(traceLatLng);
+      });
+    }
+
     this._layer.addLatLng(latlng);
     const newMarker = this._createMarker(latlng);
     this._setTooltipText();
@@ -293,6 +359,61 @@ Draw.Line = Draw.extend({
     if (this.options.finishOn === 'snap' && this._hintMarker._snapped) {
       this._finishShape(e);
     }
+  },
+  /**
+   * Auto trace. If the current vertex was snapped to a
+   * segment of another layer, return the endpoint of that segment the line
+   * should run through, so the border is traced along: the endpoint next to
+   * the previous vertex (or next to the cursor for the first vertex). Only
+   * one endpoint is inserted - the far one would make the line double back.
+   */
+  _getAutoTraceLatLngs(latlng, prevLatLng) {
+    const snapInfo = this._hintMarker._snapInfo;
+    if (
+      !snapInfo ||
+      !snapInfo.segment ||
+      snapInfo.segment.length !== 2 ||
+      !(snapInfo.layerInteractedWith instanceof L.Polyline) ||
+      snapInfo.layerInteractedWith === this._layer
+    ) {
+      return [];
+    }
+
+    // the previous vertex was snapped to the same border segment: the
+    // straight connection already follows the border, nothing to trace
+    const prevInfo =
+      this._layer._latlngInfo && this._layer._latlngInfo.length > 1
+        ? this._layer._latlngInfo[this._layer._latlngInfo.length - 2]
+        : undefined;
+    const prevSegment =
+      prevInfo && prevInfo.snapInfo && prevInfo.snapInfo.segment;
+    if (
+      prevSegment &&
+      prevSegment.length === 2 &&
+      snapInfo.segment[0].equals(prevSegment[0]) &&
+      snapInfo.segment[1].equals(prevSegment[1])
+    ) {
+      return [];
+    }
+
+    const candidates = snapInfo.segment.filter(
+      (segmentLatLng) =>
+        !segmentLatLng.equals(latlng) &&
+        !(prevLatLng && segmentLatLng.equals(prevLatLng))
+    );
+    if (candidates.length === 0) {
+      return [];
+    }
+
+    // trace towards the endpoint nearest to the previous vertex - the
+    // border corner the line passes through on its way to the cursor
+    const reference = prevLatLng || latlng;
+    candidates.sort((a, b) => {
+      const refPoint = this._map.latLngToContainerPoint(reference);
+      const toPoint = (l) => this._map.latLngToContainerPoint(l);
+      return refPoint.distanceTo(toPoint(a)) - refPoint.distanceTo(toPoint(b));
+    });
+    return [candidates[0]];
   },
   _setHintLineAfterNewVertex(hintMarkerLatLng) {
     // make the new drawn line (with another style) visible

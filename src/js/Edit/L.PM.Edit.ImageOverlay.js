@@ -5,6 +5,8 @@ Edit.ImageOverlay = Edit.extend({
   initialize(layer) {
     this._layer = layer;
     this._enabled = false;
+
+    this._initSelectionClick();
   },
   toggleEdit(options) {
     if (!this.enabled()) {
@@ -67,7 +69,7 @@ Edit.ImageOverlay = Edit.extend({
     this._layer.off('remove', this.disable, this);
 
     // only fire events if it was enabled before
-    if (!this.enabled()) {
+    if (this.enabled()) {
       if (this._layerEdited) {
         this._fireUpdate();
       }

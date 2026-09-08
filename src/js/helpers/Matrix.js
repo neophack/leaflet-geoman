@@ -55,10 +55,11 @@ Matrix.prototype = {
    */
   untransform(point) {
     const matrix = this._matrix;
-    return new L.Point(
-      (point.x / matrix[0] - matrix[4]) / matrix[0],
-      (point.y / matrix[2] - matrix[5]) / matrix[2]
-    );
+    const [a, b, c, d, tx, ty] = matrix;
+    const det = a * d - b * c;
+    const x = point.x - tx;
+    const y = point.y - ty;
+    return new L.Point((d * x - b * y) / det, (a * y - c * x) / det);
   },
 
   /**

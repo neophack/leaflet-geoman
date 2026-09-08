@@ -5,6 +5,8 @@ Edit.Text = Edit.extend({
   initialize(layer) {
     this._layer = layer;
     this._enabled = false;
+
+    this._initSelectionClick();
   },
   enable(options) {
     L.Util.setOptions(this, options);

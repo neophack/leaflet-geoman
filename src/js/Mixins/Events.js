@@ -92,6 +92,22 @@ const EventMixin = {
       source,
       customPayload
     );
+
+    // Undo/Redo: central hook to track every geometry edit
+    if (this._layer?._map?.pm?._trackEdit) {
+      this._layer._map.pm._trackEdit(this._layer);
+    }
+
+    // Measurements: update the layer tooltip after each edit
+    const measurePm = this._layer?._map?.pm;
+    if (
+      measurePm &&
+      typeof measurePm._measurementsEnabled === 'function' &&
+      measurePm._measurementsEnabled() &&
+      typeof measurePm._updateLayerMeasurement === 'function'
+    ) {
+      measurePm._updateLayerMeasurement(this._layer);
+    }
   },
   // Fired when layer is enabled for editing
   _fireEnable(source = 'Edit', customPayload = {}) {
@@ -164,6 +180,22 @@ const EventMixin = {
       source,
       customPayload
     );
+
+    // Measurements: live tooltip at the dragged vertex (shows the lengths
+    // of the segments before / after it while dragging)
+    const measurePm = this._layer?._map?.pm;
+    if (
+      measurePm &&
+      typeof measurePm._measurementsEnabled === 'function' &&
+      measurePm._measurementsEnabled() &&
+      typeof measurePm._updateLayerMeasurement === 'function'
+    ) {
+      measurePm._updateLayerMeasurement(
+        this._layer,
+        e.target,
+        this._vertexSegmentDistances?.(e.target)
+      );
+    }
   },
   // Fired when a vertex-marker is stopped dragging
   // indexPath and intersectionReset is only passed from Line / Polygon
@@ -187,6 +219,17 @@ const EventMixin = {
       source,
       customPayload
     );
+
+    // Measurements: back from the live drag tooltip to the layer tooltip
+    const measurePm = this._layer?._map?.pm;
+    if (
+      measurePm &&
+      typeof measurePm._measurementsEnabled === 'function' &&
+      measurePm._measurementsEnabled() &&
+      typeof measurePm._updateLayerMeasurement === 'function'
+    ) {
+      measurePm._updateLayerMeasurement(this._layer);
+    }
   },
   // Fired when a layer is started dragging
   _fireDragStart(source = 'Edit', customPayload = {}) {
@@ -210,6 +253,17 @@ const EventMixin = {
       source,
       customPayload
     );
+
+    // Measurements: live tooltip following the dragged layer
+    const measurePm = this._layer?._map?.pm;
+    if (
+      measurePm &&
+      typeof measurePm._measurementsEnabled === 'function' &&
+      measurePm._measurementsEnabled() &&
+      typeof measurePm._updateLayerMeasurement === 'function'
+    ) {
+      measurePm._updateLayerMeasurement(this._layer, this._layer);
+    }
   },
   // Fired when a layer is stopped dragging
   _fireDragEnd(source = 'Edit', customPayload = {}) {
@@ -223,6 +277,17 @@ const EventMixin = {
       source,
       customPayload
     );
+
+    // Measurements: back from the live drag tooltip to the layer tooltip
+    const measurePm = this._layer?._map?.pm;
+    if (
+      measurePm &&
+      typeof measurePm._measurementsEnabled === 'function' &&
+      measurePm._measurementsEnabled() &&
+      typeof measurePm._updateLayerMeasurement === 'function'
+    ) {
+      measurePm._updateLayerMeasurement(this._layer);
+    }
   },
   // Fired when layer is enabled for editing
   _fireDragEnable(source = 'Edit', customPayload = {}) {
@@ -313,6 +378,36 @@ const EventMixin = {
       customPayload
     );
   },
+  // Geofencing: fired when the layer violates
+  // `preventIntersection`
+  _fireIntersectionViolation(
+    fireLayer = this._layer,
+    source = 'Draw',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:intersectionviolation',
+      { layer: this._layer },
+      source,
+      customPayload
+    );
+  },
+  // Geofencing: fired when the layer violates
+  // `requireContainment`
+  _fireContainmentViolation(
+    fireLayer = this._layer,
+    source = 'Draw',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:containmentviolation',
+      { layer: this._layer },
+      source,
+      customPayload
+    );
+  },
   // Fired when a Line / Polygon has self intersection
   _fireIntersect(
     intersection,
@@ -361,6 +456,37 @@ const EventMixin = {
       source,
       customPayload
     );
+
+    // Measurements (issue #351): live update of the tooltip texts
+    if (source === 'Draw' && typeof this._updateMeasureTooltip === 'function') {
+      this._updateMeasureTooltip(latlngs);
+    }
+    // Geofencing: preventIntersection / requireContainment
+    if (typeof this._checkGeofencing === 'function') {
+      this._checkGeofencing(latlngs, source);
+    }
+    const measurePm = this._layer?._map?.pm;
+    if (
+      ['Edit', 'Rotation', 'Scale'].includes(source) &&
+      measurePm &&
+      typeof measurePm._measurementsEnabled === 'function' &&
+      measurePm._measurementsEnabled() &&
+      typeof measurePm._updateLayerMeasurement === 'function'
+    ) {
+      if (!measurePm._measureThrottles) {
+        measurePm._measureThrottles = new WeakMap();
+      }
+      let throttled = measurePm._measureThrottles.get(this._layer);
+      if (!throttled) {
+        throttled = L.Util.throttle(
+          () => measurePm._updateLayerMeasurement(this._layer),
+          100,
+          measurePm
+        );
+        measurePm._measureThrottles.set(this._layer, throttled);
+      }
+      throttled();
+    }
   },
 
   // Fired when text of a text layer changed
@@ -691,6 +817,354 @@ const EventMixin = {
         eventType,
         focusOn,
       },
+      source,
+      customPayload
+    );
+  },
+
+  // Fired when Union Mode is toggled.
+  _fireGlobalUnionModeToggled(enabled, source = 'Global', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:globalunionmodetoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when two or more layers were merged with Union
+  _fireUnion(resultLayer, mergedLayers, source = 'Union', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:union',
+      { resultLayer, mergedLayers, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when Difference Mode is toggled.
+  _fireGlobalDifferenceModeToggled(
+    enabled,
+    source = 'Global',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:globaldifferencemodetoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when a layer was subtracted from another layer
+  _fireDifference(
+    resultLayer,
+    subtractedLayers,
+    originalLayer,
+    source = 'Difference',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:difference',
+      { resultLayer, subtractedLayers, originalLayer, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when a layer was split with the Split Mode
+  _fireSplit(
+    fireLayer,
+    { layers, originalLayer, splitLayer, shape },
+    source = 'Split',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:split',
+      {
+        layers,
+        originalLayer,
+        splitLayer,
+        shape,
+        map: this._map || this.map,
+      },
+      source,
+      customPayload
+    );
+  },
+  // Fired when Split Mode is toggled.
+  _fireGlobalSplitModeToggled(source = 'Global', customPayload = {}) {
+    this.__fire(
+      this._map,
+      'pm:globalsplitmodetoggled',
+      {
+        enabled: !!this._enabled,
+        map: this._map,
+      },
+      source,
+      customPayload
+    );
+  },
+  // Fired when Scale Mode is toggled.
+  _fireGlobalScaleModeToggled(source = 'Global', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:globalscalemodetoggled',
+      {
+        enabled: this.globalScaleModeEnabled(),
+        map: this.map,
+      },
+      source,
+      customPayload
+    );
+  },
+  // Fired when scaling of a layer is enabled / disabled
+  _fireScaleEnable(fireLayer, source = 'Scale', customPayload = {}) {
+    this.__fire(
+      fireLayer,
+      'pm:scaleenable',
+      { layer: this._layer, shape: this._shape },
+      source,
+      customPayload
+    );
+  },
+  _fireScaleDisable(fireLayer, source = 'Scale', customPayload = {}) {
+    this.__fire(
+      fireLayer,
+      'pm:scaledisable',
+      { layer: this._layer, shape: this._shape },
+      source,
+      customPayload
+    );
+  },
+  // Fired when scaling of a layer starts / is active / ended
+  _fireScaleStart(
+    fireLayer,
+    originLatLngs,
+    source = 'Scale',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:scalestart',
+      { layer: this._layer, shape: this._shape, originLatLngs },
+      source,
+      customPayload
+    );
+  },
+  _fireScale(
+    fireLayer,
+    factor,
+    oldLatLngs,
+    newLatLngs,
+    source = 'Scale',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:scale',
+      {
+        layer: this._layer,
+        shape: this._shape,
+        factor,
+        oldLatLngs,
+        newLatLngs,
+      },
+      source,
+      customPayload
+    );
+  },
+  _fireScaleEnd(
+    fireLayer,
+    factor,
+    originLatLngs,
+    newLatLngs,
+    source = 'Scale',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:scaleend',
+      {
+        layer: this._layer,
+        shape: this._shape,
+        factor,
+        originLatLngs,
+        newLatLngs,
+      },
+      source,
+      customPayload
+    );
+  },
+  // Fired when Lasso Mode is toggled.
+  _fireGlobalLassoModeToggled(enabled, source = 'Global', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:globallassomodetoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when a lasso selection was completed
+  _fireLassoSelect(
+    lassoCoords,
+    selectionChangedLayers,
+    selectedLayers,
+    source = 'Lasso',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:lasso-select',
+      { lassoCoords, selectionChangedLayers, selectedLayers, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when CopyLayer Mode is toggled.
+  _fireGlobalCopyLayerModeToggled(
+    enabled,
+    source = 'Global',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:globalcopylayermodetoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when a layer was copied
+  _fireCopyLayer(
+    newLayer,
+    sourceLayer,
+    shape,
+    source = 'Copy',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:copylayer',
+      { sourceLayer, newLayer, shape, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when LineSimplification Mode is toggled.
+  _fireGlobalLineSimplificationModeToggled(
+    enabled,
+    source = 'Global',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:globallinesimplificationmodetoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when a layer was simplified
+  _fireSimplify(
+    layer,
+    originalLatLngs,
+    latlngs,
+    source = 'Simplify',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:simplify',
+      { layer, originalLatLngs, latlngs, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when BringToFront Mode is toggled.
+  _fireGlobalBringToFrontModeToggled(
+    enabled,
+    source = 'Global',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:globalbringtofrontmodetoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when SendToBack Mode is toggled.
+  _fireGlobalSendToBackModeToggled(
+    enabled,
+    source = 'Global',
+    customPayload = {}
+  ) {
+    this.__fire(
+      this.map,
+      'pm:globalbringtobackmodetoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when a layer was brought to front / sent to back
+  _fireOrderChange(layer, order, source = 'Order', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:orderchange',
+      { layer, order, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when pinning was enabled / disabled
+  _firePinningToggled(enabled, source = 'Pinning', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:pinningtoggled',
+      { enabled, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when undo() restored a command
+  _fireUndo(type, source = 'Undo', customPayload = {}) {
+    // `type` is reserved by Leaflet's fire(), so the command type is
+    // exposed as `commandType`
+    this.__fire(
+      this.map,
+      'pm:undo',
+      { commandType: type, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when redo() re-applied a command
+  _fireRedo(type, source = 'Undo', customPayload = {}) {
+    this.__fire(
+      this.map,
+      'pm:redo',
+      { commandType: type, map: this.map },
+      source,
+      customPayload
+    );
+  },
+  // Fired when the category of a layer changed
+  _fireCategoryChange(
+    fireLayer,
+    oldCategory,
+    category,
+    source = 'Categories',
+    customPayload = {}
+  ) {
+    this.__fire(
+      fireLayer,
+      'pm:categorychange',
+      { layer: this._layer, oldCategory, category },
       source,
       customPayload
     );

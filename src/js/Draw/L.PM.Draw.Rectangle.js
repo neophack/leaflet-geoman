@@ -6,6 +6,8 @@ Draw.Rectangle = Draw.extend({
     this._map = map;
     this._shape = 'Rectangle';
     this.toolbarButtonName = 'drawRectangle';
+    // merge into a copy of the inherited options (L.Class.extend shadows options)
+    L.Util.setOptions(this, { dragDraw: false });
   },
   enable(options) {
     // TODO: Think about if these options could be passed globally for all
@@ -36,6 +38,10 @@ Draw.Rectangle = Draw.extend({
     this._startMarker = L.marker(this._map.getCenter(), {
       icon: L.divIcon({ className: 'marker-icon rect-start-marker' }),
       draggable: false,
+      // #911: sitting under the cursor with `interactive: true` (the
+      // Marker default) would swallow the map click that finishes the
+      // rectangle, since a Marker's bubblingMouseEvents defaults to false
+      interactive: false,
       zIndexOffset: -100,
       opacity: this.options.cursorMarker ? 1 : 0,
     });
@@ -47,6 +53,10 @@ Draw.Rectangle = Draw.extend({
     this._hintMarker = L.marker(this._map.getCenter(), {
       zIndexOffset: 150,
       icon: L.divIcon({ className: 'marker-icon cursor-marker' }),
+      // #911: always tracks the cursor, so it's directly under every click -
+      // must stay non-interactive or it eats the map click that places the
+      // starting corner / finishes the rectangle
+      interactive: false,
     });
     this._setPane(this._hintMarker, 'vertexPane');
     this._hintMarker._pmTempLayer = true;
@@ -79,6 +89,7 @@ Draw.Rectangle = Draw.extend({
             className: 'marker-icon rect-style-marker',
           }),
           draggable: false,
+          interactive: false,
           zIndexOffset: 100,
         });
         this._setPane(styleMarker, 'vertexPane');
@@ -108,6 +119,34 @@ Draw.Rectangle = Draw.extend({
     // fire drawstart event
     this._fireDrawStart();
     this._setGlobalDrawMode();
+
+    // issue #1106: draw by press-drag-release instead of two clicks
+    if (this.options.dragDraw) {
+      this._map.off('click', this._placeStartingMarkers, this);
+      this._map.on('mousedown', this._onDragDrawStart, this);
+      this._map.on('mouseup', this._onDragDrawEnd, this);
+    }
+  },
+  _onDragDrawStart(e) {
+    if (e.originalEvent?.button !== 0) {
+      return;
+    }
+    // prevent panning the map while dragging out the rectangle
+    if (this._map.dragging && this._map.dragging.enabled()) {
+      this._map.dragging.disable();
+      this._dragDrawWasDraggable = true;
+    }
+    this._placeStartingMarkers(e);
+  },
+  _onDragDrawEnd(e) {
+    // only finish when the rectangle was started
+    if (this._layerGroup && this._layerGroup.hasLayer(this._layer)) {
+      if (this._dragDrawWasDraggable && this._map.dragging) {
+        this._map.dragging.enable();
+      }
+      this._dragDrawWasDraggable = false;
+      this._finishShape(e);
+    }
   },
   disable() {
     // disable drawing mode
@@ -126,6 +165,13 @@ Draw.Rectangle = Draw.extend({
     this._map.off('click', this._finishShape, this);
     this._map.off('click', this._placeStartingMarkers, this);
     this._map.off('mousemove', this._syncHintMarker, this);
+    this._map.off('mousedown', this._onDragDrawStart, this);
+    this._map.off('mouseup', this._onDragDrawEnd, this);
+
+    if (this._dragDrawWasDraggable && this._map.dragging) {
+      this._map.dragging.enable();
+    }
+    this._dragDrawWasDraggable = false;
 
     // remove helping layers
     this._map.removeLayer(this._layerGroup);
@@ -261,6 +307,26 @@ Draw.Rectangle = Draw.extend({
       this._hintMarker.setLatLng(e.latlng);
     }
 
+    // a snap is only valid for the position it was calculated for. Without a
+    // mousemove between two clicks the hint marker still holds the snap of
+    // the previous (start) position - `_snapped` is then stale, and honoring
+    // it would pin the finish corner far away from the actual click (up to
+    // drawing a degenerate rect when it equals the start corner and the draw
+    // gets stuck, because the click listener is already swapped to
+    // _finishShape and every further click runs into the same stale state)
+    if (e?.latlng && this._hintMarker._snapped) {
+      const hintPoint = this._map.latLngToContainerPoint(
+        this._hintMarker.getLatLng()
+      );
+      const clickPoint = this._map.latLngToContainerPoint(e.latlng);
+      if (
+        hintPoint.distanceTo(clickPoint) > (this.options.snapDistance || 30)
+      ) {
+        this._hintMarker.setLatLng(e.latlng);
+        this._hintMarker._snapped = false;
+      }
+    }
+
     // get coordinate for new vertex by hintMarker (cursor marker)
     const B = this._hintMarker.getLatLng();
     // get already placed corner from the startmarker
@@ -276,7 +342,15 @@ Draw.Rectangle = Draw.extend({
     }
 
     if (A.equals(B)) {
-      // rectangle has only one point
+      // rectangle has only one point (a zero-movement press-release in
+      // dragDraw mode). _placeStartingMarkers already swapped the map's
+      // 'click' listener from itself to _finishShape - undo that here too,
+      // otherwise that listener is stuck bound to _finishShape (disable(),
+      // which normally removes it, is never reached on this early return)
+      if (this.options.dragDraw) {
+        this._map.off('click', this._finishShape, this);
+        this._map.on('click', this._placeStartingMarkers, this);
+      }
       return;
     }
 

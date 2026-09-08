@@ -12,6 +12,12 @@
  * @returns {string} - The resolved language key
  */
 export function resolveLanguageCode(lang, availableTranslations) {
+  // Guard against non-string input (e.g. setLang(null)), which would
+  // otherwise throw on the .trim() call below
+  if (!lang || typeof lang !== 'string') {
+    return 'en';
+  }
+
   // Normalize the language code to lowercase and trim any whitespace
   lang = lang.trim().toLowerCase();
 

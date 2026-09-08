@@ -20,6 +20,8 @@ Edit.Line = Edit.extend({
   initialize(layer) {
     this._layer = layer;
     this._enabled = false;
+
+    this._initSelectionClick();
   },
   enable(options) {
     L.Util.setOptions(this, options);
@@ -45,6 +47,10 @@ Edit.Line = Edit.extend({
 
     // change state
     this._enabled = true;
+
+    // issue #366 (large layer rendering): editing needs the full geometry,
+    // this has to happen before _initMarkers reads the coordinates
+    this._map.pm?._suspendOptimization?.(this._layer);
 
     // init markers
     this._initMarkers();
@@ -73,6 +79,20 @@ Edit.Line = Edit.extend({
     } else {
       this.cachedColor = undefined;
     }
+
+    // issue #366: refresh the visible markers when the viewport changes
+    if (!this.throttledUpdateViewport) {
+      this.throttledUpdateViewport = L.Util.throttle(
+        this._updateMarkersViewport,
+        100,
+        this
+      );
+    }
+    this._map.on('moveend', this.throttledUpdateViewport, this);
+    this._map.on('zoomend', this.throttledUpdateViewport, this);
+    // zoom changes the pixel spacing -> rebuild the shown edit markers
+    this._map.on('zoomend', this._onZoomEndRebuildMarkers, this);
+
     this._fireEnable();
   },
   disable() {
@@ -86,11 +106,22 @@ Edit.Line = Edit.extend({
       return;
     }
     this._enabled = false;
+
     this._markerGroup.clearLayers();
     this._markerGroup.removeFrom(this._map);
 
+    // issue #366: the viewport can move while editing is off (no
+    // moveend/zoomend listener attached then) - drop the cache so the next
+    // enable() recomputes it against the current view instead of a stale one
+    this._viewportBounds = null;
+
     // remove listener
     this._layer.off('remove', this.disable, this);
+    if (this._map) {
+      this._map.off('moveend', this.throttledUpdateViewport, this);
+      this._map.off('zoomend', this.throttledUpdateViewport, this);
+      this._map.off('zoomend', this._onZoomEndRebuildMarkers, this);
+    }
 
     if (!this.options.allowSelfIntersection) {
       this._layer.off(
@@ -111,6 +142,11 @@ Edit.Line = Edit.extend({
     }
     this._layerEdited = false;
     this._fireDisable();
+
+    // issue #366 (large layer rendering): re-enable the rendering
+    // optimization only after firing update/disable, so listeners still see
+    // the full (edited) geometry via layer.getLatLngs()
+    this._map?.pm?._resumeOptimization?.(this._layer);
   },
   enabled() {
     return this._enabled;
@@ -129,6 +165,11 @@ Edit.Line = Edit.extend({
     } else {
       this._disableSnapping();
     }
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
   },
   _initMarkers() {
     const map = this._map;
@@ -144,6 +185,10 @@ Edit.Line = Edit.extend({
     this._markerGroup = new L.FeatureGroup();
     this._markerGroup._pmTempLayer = true;
 
+    // issue #366: flat list of all marker objects (vertex & middle) for the
+    // viewport culling - only markers in view are attached to the DOM
+    this._allEditMarkers = [];
+
     // handle coord-rings (outer, inner, etc)
     const handleRing = (coordsArr) => {
       // if there is another coords ring, go a level deep and do this again
@@ -151,10 +196,28 @@ Edit.Line = Edit.extend({
         return coordsArr.map(handleRing, this);
       }
 
-      // the marker array, it includes only the markers of vertexes (no middle markers)
-      const ringArr = coordsArr.map(this._createMarker, this);
+      // rings with too many vertices only get a decimated subset of vertex
+      // markers (editing thousands of markers freezes the browser). The
+      // array keeps `{}` placeholders so marker indices stay aligned with
+      // coordinate indices
+      const keepSet = this._shownIndicesForRing(coordsArr);
+      const simplify = !!keepSet;
 
-      if (this.options.hideMiddleMarkers !== true) {
+      // the marker array, it includes only the markers of vertexes (no middle markers)
+      const ringArr = coordsArr.map((latlng, k) => {
+        if (simplify && !keepSet.has(k)) {
+          return {}; // placeholder for a hidden vertex (no marker)
+        }
+        const marker = this._createMarker(latlng);
+        if (simplify) {
+          marker._pmSimplified = true;
+        }
+        return marker;
+      });
+
+      // middle markers are useless on simplified rings (between shown
+      // vertices there are hundreds of hidden ones) and far too many
+      if (this.options.hideMiddleMarkers !== true && !simplify) {
         // create small markers in the middle of the regular markers
         coordsArr.map((v, k) => {
           // find the next index fist
@@ -177,6 +240,80 @@ Edit.Line = Edit.extend({
 
     // add markerGroup to map
     map.addLayer(this._markerGroup);
+
+    // recreated markers need the pin bindings again
+    if (this.options.pinning) {
+      this._initPinning();
+    }
+  },
+
+  // which vertices of a ring get an editable marker. Returns null when the
+  // ring should not be simplified. Zoom dependent: shown vertices are at
+  // least `simplifyEditMarkersSpacing` screen pixels apart, so zooming in
+  // reveals more markers for finer editing, zooming out shows fewer. The
+  // `simplifyEditMarkersMax` cap prevents thousands of markers on deep zoom
+  _shownIndicesForRing(coordsArr) {
+    const threshold = this.options.simplifyEditMarkers;
+    if (
+      !(threshold > 0) ||
+      coordsArr.length <= threshold ||
+      this.options.rotate
+    ) {
+      return null;
+    }
+
+    const spacing = this.options.simplifyEditMarkersSpacing;
+    let kept = [];
+    if (spacing > 0 && this._map) {
+      const pts = coordsArr.map((ll) =>
+        this._map.latLngToLayerPoint(L.latLng(ll))
+      );
+      kept.push(0);
+      let last = 0;
+      for (let i = 1; i < coordsArr.length - 1; i += 1) {
+        if (pts[i].distanceTo(pts[last]) >= spacing) {
+          kept.push(i);
+          last = i;
+        }
+      }
+      kept.push(coordsArr.length - 1);
+    } else {
+      // no spacing / no map: fall back to a uniform stride
+      const step = Math.ceil(coordsArr.length / threshold);
+      for (let i = 0; i < coordsArr.length; i += step) {
+        kept.push(i);
+      }
+    }
+    if (kept[kept.length - 1] !== coordsArr.length - 1) {
+      kept.push(coordsArr.length - 1);
+    }
+
+    const maxShown = this.options.simplifyEditMarkersMax ?? threshold * 3;
+    if (kept.length > maxShown) {
+      const stride = Math.ceil(kept.length / maxShown);
+      kept = kept.filter((_, i) => i % stride === 0);
+      if (kept[kept.length - 1] !== coordsArr.length - 1) {
+        kept.push(coordsArr.length - 1);
+      }
+    }
+    return new Set(kept);
+  },
+
+  // issue #366: simplified rings rebuild their shown markers on zoom so the
+  // marker density matches the zoom level (more markers zoomed in)
+  _onZoomEndRebuildMarkers() {
+    if (!this._enabled || !this._markerGroup) {
+      return;
+    }
+    if (this._dragging) {
+      // rebuilding below a running drag breaks it - defer to drag end
+      this._needsMarkerRebuild = true;
+      return;
+    }
+    this._initMarkers();
+    if (this.options.snappable) {
+      this._initSnappableMarkers();
+    }
   },
 
   // creates initial markers for coordinates
@@ -204,9 +341,53 @@ Edit.Line = Edit.extend({
       }
     }
 
-    this._markerGroup.addLayer(marker);
+    // issue #366: only attach markers that are in the viewport, the marker
+    // object itself is always created so dragging / neighbor logic is unchanged
+    this._allEditMarkers.push(marker);
+    if (!this._limitMarkersByViewport() || this._markerInViewport(latlng)) {
+      this._markerGroup.addLayer(marker);
+    }
 
     return marker;
+  },
+
+  // issue #366 (6000+ vertex performance): viewport culling of edit markers
+  _limitMarkersByViewport() {
+    return (
+      this.options.limitMarkersToViewport !== false &&
+      this.options.limitMarkersToCount === -1 && // count limit & viewport limit don't mix
+      !!this._map
+    );
+  },
+  _markerInViewport(latlng) {
+    if (!this._viewportBounds) {
+      this._viewportBounds = this._map.getBounds().pad(0.25);
+    }
+    return this._viewportBounds.contains(latlng);
+  },
+  _updateMarkersViewport() {
+    if (!this._markerGroup || !this._enabled || !this._allEditMarkers) {
+      // the throttled moveend/zoomend handler can still fire after the
+      // markers were torn down (layer removed mid-edit) - nothing to do
+      return;
+    }
+    if (!this._limitMarkersByViewport() || this._preventRenderMarkers) {
+      return;
+    }
+    this._viewportBounds = this._map.getBounds().pad(0.25);
+    const group = this._markerGroup;
+    this._allEditMarkers.forEach((marker) => {
+      if (marker._pmRemoved) {
+        return;
+      }
+      const inView = this._viewportBounds.contains(marker.getLatLng());
+      const attached = group.hasLayer(marker);
+      if (inView && !attached) {
+        group.addLayer(marker);
+      } else if (!inView && attached) {
+        group.removeLayer(marker);
+      }
+    });
   },
 
   // creates the middle markes between coordinates
@@ -427,7 +608,7 @@ Edit.Line = Edit.extend({
     markers.forEach((marker) => {
       if (Array.isArray(marker)) {
         this._updateDisabledMarkerStyle(marker, disabled);
-      } else if (marker._icon) {
+      } else if (marker && marker._icon) {
         if (disabled && !this._checkMarkerAllowedToDrag(marker)) {
           L.DomUtil.addClass(marker._icon, 'vertexmarker-disabled');
         } else {
@@ -522,6 +703,10 @@ Edit.Line = Edit.extend({
     // if no coords are left, remove the layer
     if (!hasValues(coords)) {
       this._layer.remove();
+      // fire pm:remove so the removal is tracked (undoable) and listeners
+      // are notified - a plain remove() would make the layer vanish silently
+      this._fireRemove(this._layer);
+      this._fireRemove(this._map, this._layer);
     }
 
     // remove all empty coord-rings
@@ -541,15 +726,18 @@ Edit.Line = Edit.extend({
       if (marker._middleMarkerPrev) {
         this._markerGroup.removeLayer(marker._middleMarkerPrev);
         this._removeFromCache(marker._middleMarkerPrev);
+        marker._middleMarkerPrev._pmRemoved = true; // issue #366 viewport culling
       }
       if (marker._middleMarkerNext) {
         this._markerGroup.removeLayer(marker._middleMarkerNext);
         this._removeFromCache(marker._middleMarkerNext);
+        marker._middleMarkerNext._pmRemoved = true; // issue #366 viewport culling
       }
 
       // remove the marker from the map
       this._markerGroup.removeLayer(marker);
       this._removeFromCache(marker);
+      marker._pmRemoved = true; // issue #366 viewport culling
 
       if (markerArr) {
         let rightMarkerIndex;
@@ -570,7 +758,13 @@ Edit.Line = Edit.extend({
         if (rightMarkerIndex !== leftMarkerIndex) {
           const leftM = markerArr[leftMarkerIndex];
           const rightM = markerArr[rightMarkerIndex];
-          if (this.options.hideMiddleMarkers !== true) {
+          if (
+            this.options.hideMiddleMarkers !== true &&
+            leftM &&
+            rightM &&
+            leftM.getLatLng &&
+            rightM.getLatLng
+          ) {
             this._createMiddleMarker(leftM, rightM);
           }
         }
@@ -608,8 +802,113 @@ Edit.Line = Edit.extend({
     latlng.alt = parent[index].alt;
     parent.splice(index, 1, latlng);
 
+    // simplified rings: let the hidden (marker-less) vertices follow the
+    // drag with linear interpolation between the dragged vertex and its
+    // next shown neighbors
+    if (marker._pmSimplified && this._simplifyDragStart) {
+      const markerArr =
+        indexPath.length > 1 ? get(this._markers, parentPath) : this._markers;
+      const origRing =
+        indexPath.length > 1
+          ? get(this._simplifyDragStart.coords, parentPath)
+          : this._simplifyDragStart.coords;
+      this._interpolateHiddenVertices(
+        parent,
+        origRing,
+        markerArr,
+        index,
+        this._simplifyDragStart.latlng,
+        latlng
+      );
+    }
+
     // set new coords on layer
     this._layer.setLatLngs(coords);
+  },
+
+  // moves the hidden vertices (the `{}` placeholders in the marker array)
+  // between the dragged vertex and its next shown neighbors along with the
+  // drag, weighted by their relative position (0 at the neighbor, 1 at the
+  // dragged vertex)
+  _interpolateHiddenVertices(
+    coordsRing,
+    origRing,
+    markerArr,
+    index,
+    dragStartLatLng,
+    dragLatLng
+  ) {
+    const ringLen = markerArr.length;
+    const dLat = dragLatLng.lat - dragStartLatLng.lat;
+    const dLng = dragLatLng.lng - dragStartLatLng.lng;
+    const isShown = (m) => m && typeof m.getLatLng === 'function';
+
+    // find the next shown marker left / right of the dragged one
+    // (wrapping around on polygons)
+    const findShown = (direction) => {
+      for (let i = 1; i < ringLen; i += 1) {
+        const raw = index + direction * i;
+        if (raw < 0 || raw >= ringLen) {
+          if (!this.isPolygon()) return -1; // no wrap on open lines
+        }
+        const idx = (raw + ringLen * 2) % ringLen;
+        if (idx === index) return -1; // full circle, no other shown marker
+        if (isShown(markerArr[idx])) {
+          return idx;
+        }
+      }
+      return -1;
+    };
+    const prevShown = findShown(-1);
+    const nextShown = findShown(1);
+
+    // walks from the dragged vertex towards `neighborIdx` (exclusive) in
+    // path order and moves the hidden vertices along with the drag. The
+    // movement is weighted by the path distance on the original geometry:
+    // vertices close to the dragged one follow almost completely, vertices
+    // further down the line move less - the drag "travels" along the line
+    // and fades out at the next shown vertex
+    const interpolateTowards = (neighborIdx, step) => {
+      if (neighborIdx === -1 || neighborIdx === index) return;
+
+      // hidden vertex indices in path order, starting next to the dragged one
+      const idxs = [];
+      for (let k = 1; k < ringLen; k += 1) {
+        const idx = (index + step * k + ringLen * 2) % ringLen;
+        if (idx === neighborIdx || idx === index) break;
+        idxs.push(idx);
+      }
+      if (!idxs.length) return;
+
+      // cumulative path distance from the dragged vertex, measured on the
+      // original (pre-drag) coordinates
+      const origDist = (a, b) =>
+        origRing[a] && origRing[b] ? origRing[a].distanceTo(origRing[b]) : 0;
+      let cumulative = 0;
+      const cumAt = idxs.map((idx, i) => {
+        const from = i === 0 ? index : idxs[i - 1];
+        cumulative += origDist(from, idx);
+        return cumulative;
+      });
+      // include the closing segment up to the shown neighbor
+      const total = cumulative + origDist(idxs[idxs.length - 1], neighborIdx);
+      if (total <= 0) return; // coincident vertices, nothing to weight
+
+      idxs.forEach((idx, i) => {
+        if (isShown(markerArr[idx])) return; // follows its own marker
+        const orig = origRing[idx];
+        if (!orig) return;
+        const w = 1 - cumAt[i] / total;
+        coordsRing[idx] = L.latLng(
+          orig.lat + dLat * w,
+          orig.lng + dLng * w,
+          orig.alt
+        );
+      });
+    };
+
+    interpolateTowards(prevShown, -1);
+    interpolateTowards(nextShown, 1);
   },
 
   _getNeighborMarkers(marker) {
@@ -630,10 +929,21 @@ Edit.Line = Edit.extend({
     const prevMarker = markerArr[prevMarkerIndex];
     const nextMarker = markerArr[nextMarkerIndex];
 
+    // `{}` placeholders on simplified rings have no latlng
+    if (!prevMarker?.getLatLng || !nextMarker?.getLatLng) {
+      return { prevMarker: undefined, nextMarker: undefined };
+    }
+
     return { prevMarker, nextMarker };
   },
   _checkMarkerAllowedToDrag(marker) {
     const { prevMarker, nextMarker } = this._getNeighborMarkers(marker);
+
+    // neighbors are `{}` placeholders on a simplified ring (issue #366) -
+    // there's no real edge to check, so don't block the drag
+    if (!prevMarker || !nextMarker) {
+      return true;
+    }
 
     const prevLine = L.polyline([prevMarker.getLatLng(), marker.getLatLng()]);
     const nextLine = L.polyline([marker.getLatLng(), nextMarker.getLatLng()]);
@@ -703,6 +1013,15 @@ Edit.Line = Edit.extend({
       );
     }
 
+    // simplified rings: remember the original position so the hidden
+    // vertices can follow the drag by linear interpolation
+    this._simplifyDragStart = marker._pmSimplified
+      ? {
+          latlng: marker.getLatLng().clone(),
+          coords: copyLatLngs(this._layer, this._layer.getLatLngs()),
+        }
+      : null;
+
     if (
       !this.options.allowSelfIntersection &&
       this.options.allowSelfIntersectionEdit &&
@@ -759,11 +1078,16 @@ Edit.Line = Edit.extend({
     // be aware that "next" and "prev" might be interchanged, depending on the geojson array
     const markerLatLng = marker.getLatLng();
 
-    // get latlng of prev and next marker
-    const prevMarkerLatLng = markerArr[prevMarkerIndex].getLatLng();
-    const nextMarkerLatLng = markerArr[nextMarkerIndex].getLatLng();
+    // get latlng of prev and next marker (may be `{}` placeholders on
+    // simplified rings - then there are no middle markers anyway)
+    const prevMarker = markerArr[prevMarkerIndex];
+    const nextMarker = markerArr[nextMarkerIndex];
+    const prevMarkerLatLng =
+      prevMarker && prevMarker.getLatLng ? prevMarker.getLatLng() : null;
+    const nextMarkerLatLng =
+      nextMarker && nextMarker.getLatLng ? nextMarker.getLatLng() : null;
 
-    if (marker._middleMarkerNext) {
+    if (marker._middleMarkerNext && nextMarkerLatLng) {
       const middleMarkerNextLatLng = L.PM.Utils.calcMiddleLatLng(
         this._map,
         markerLatLng,
@@ -788,9 +1112,51 @@ Edit.Line = Edit.extend({
     this._fireMarkerDrag(e, indexPath);
     this._fireChange(this._layer.getLatLngs(), 'Edit');
   },
+  /**
+   * Measurements: lengths of the two segments adjacent to the dragged
+   * vertex, shown instead of the single segment row while dragging.
+   * Polygons always have both neighbors; on open lines the ends only have
+   * one.
+   */
+  _vertexSegmentDistances(marker) {
+    if (!marker || !this._map) {
+      return undefined;
+    }
+    const { indexPath, parentPath } = L.PM.Utils.findDeepMarkerIndex(
+      this._markers,
+      marker
+    );
+    if (!indexPath) {
+      return undefined;
+    }
+    const markerArr =
+      indexPath.length > 1 ? get(this._markers, parentPath) : this._markers;
+    if (!markerArr || markerArr.length < 2) {
+      return undefined;
+    }
+    const i = markerArr.indexOf(marker);
+    if (i === -1) {
+      return undefined;
+    }
+    const { length } = markerArr;
+    const distanceTo = (other) =>
+      other && other.getLatLng
+        ? this._map.distance(marker.getLatLng(), other.getLatLng())
+        : undefined;
+    const before =
+      this.isPolygon() || i !== 0
+        ? distanceTo(markerArr[(i - 1 + length) % length])
+        : undefined;
+    const after =
+      this.isPolygon() || i !== length - 1
+        ? distanceTo(markerArr[(i + 1) % length])
+        : undefined;
+    return { before, after };
+  },
   _onMarkerDragEnd(e) {
     const marker = e.target;
     this._preventRenderingMarkers(false);
+    this._simplifyDragStart = null;
 
     if (!this._vertexValidationDragEnd(marker)) {
       return;
@@ -843,6 +1209,12 @@ Edit.Line = Edit.extend({
     this._fireEdit();
     this._layerEdited = true;
     this._fireChange(this._layer.getLatLngs(), 'Edit');
+
+    // deferred marker rebuild (zoom happened below the drag)
+    if (this._needsMarkerRebuild) {
+      this._needsMarkerRebuild = false;
+      this._onZoomEndRebuildMarkers();
+    }
   },
   _onVertexClick(e) {
     const vertex = e.target;

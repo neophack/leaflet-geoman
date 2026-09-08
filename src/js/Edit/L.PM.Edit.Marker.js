@@ -9,6 +9,8 @@ Edit.Marker = Edit.extend({
 
     // register dragend event e.g. to fire pm:edit
     this._layer.on('dragend', this._onDragEnd, this);
+
+    this._initSelectionClick();
   },
   // TODO: remove default option in next major Release
   enable(options = { draggable: true }) {
@@ -75,6 +77,12 @@ Edit.Marker = Edit.extend({
       this._disableSnapping();
     }
 
+    if (this.options.pinning) {
+      this._initPinning();
+    } else {
+      this._disablePinning();
+    }
+
     if (this.options.draggable) {
       this.enableLayerDrag();
     } else {
@@ -84,6 +92,16 @@ Edit.Marker = Edit.extend({
     if (!this.options.preventMarkerRemoval) {
       this._layer.on('contextmenu', this._removeMarker, this);
     }
+  },
+  // markers have no vertex handles - the pin link starts from the layer's
+  // own drag events (pm:dragstart via the Dragging mixin)
+  _initPinning() {
+    const layer = this._layer;
+    layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
+    layer.on('pm:dragstart', this._onPinnedMarkerDragStart, this);
+  },
+  _disablePinning() {
+    this._layer.off('pm:dragstart', this._onPinnedMarkerDragStart, this);
   },
   _removeMarker(e) {
     const marker = e.target;

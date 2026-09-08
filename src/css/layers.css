@@ -106,3 +106,83 @@
   font-size: 14px;
   pointer-events: none;
 }
+
+/* scale handles */
+.leaflet-marker-icon.leaflet-pm-scale-handle {
+  width: 11px;
+  height: 11px;
+  background-color: #fff;
+  border: 1px solid #424242;
+  border-radius: 2px;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
+  cursor: nwse-resize;
+  margin: -6px 0 0 -6px;
+}
+
+/* Lasso mode cursor. Map dragging is disabled while lassoing, so
+   without user-select: none the browser turns the drag into a native text
+   selection (e.g. the + / − labels of the zoom control) */
+.leaflet-pm-lasso-cursor {
+  cursor: crosshair;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.leaflet-pm-lasso-cursor .leaflet-grab {
+  cursor: crosshair;
+}
+
+/* Measurements: the measurement block inside a (draw hint / layer) tooltip.
+   Rendered with Leaflet's default tooltip styling */
+.leaflet-geoman-measurements {
+  margin: 8px 0 0;
+}
+
+.leaflet-geoman-measurements:only-child {
+  margin: 0;
+}
+
+/* Selection effect 'outline' (selectionEffect: 'outline'): markers and
+   image overlays get a black rectangular frame on their element - vector
+   shapes and text markers (measured around their label box, since their icon
+   element is 0x0) get a black rectangle on a pane ABOVE the shapes instead
+   (see Mixins/Selection.js). */
+.leaflet-container .leaflet-marker-icon.pm-selection-outline-element,
+.leaflet-container .leaflet-marker-icon.pm-selection-outline-element:focus,
+.leaflet-container .leaflet-image-layer.pm-selection-outline-element,
+.leaflet-container .leaflet-image-layer.pm-selection-outline-element:focus {
+  /* !important: Leaflet's preventOutline() writes an inline
+     `outline-style: none` onto draggable elements on mousedown and only
+     removes it on the next keydown - it would swallow this frame */
+  outline: 2px solid #000 !important;
+  outline-offset: 2px;
+}
+
+/* Dashed variant: while the selectionOutlineStyle global option is
+   'dashed', the element frames dash too. Selection.js toggles the class
+   with the option; the extra .pm-selection-outline-dashed class wins the
+   !important tie by specificity. */
+.leaflet-container.pm-selection-outline-dashed
+  .leaflet-marker-icon.pm-selection-outline-element,
+.leaflet-container.pm-selection-outline-dashed
+  .leaflet-marker-icon.pm-selection-outline-element:focus,
+.leaflet-container.pm-selection-outline-dashed
+  .leaflet-image-layer.pm-selection-outline-element,
+.leaflet-container.pm-selection-outline-dashed
+  .leaflet-image-layer.pm-selection-outline-element:focus {
+  outline-style: dashed !important;
+}
+
+/* The browser focus ring on a clicked/focused layer is suppressed in every
+   mode: the selection feedback comes from the library alone ('dim' fades
+   the other layers, 'outline' draws the black frame - solid or dashed per
+   selectionOutlineStyle) and the native ring would double that frame with
+   an extra solid halo. */
+.leaflet-container svg path:focus,
+.leaflet-container svg image:focus,
+.leaflet-container .leaflet-marker-icon:focus,
+.leaflet-container .leaflet-image-layer:focus {
+  outline: none;
+}

@@ -50,6 +50,16 @@ const PMButton = L.Control.extend({
   getText() {
     return this._button.text;
   },
+  setTitle(title) {
+    this._button.title = title;
+    if (this.buttonsDomNode) {
+      if (title) {
+        this.buttonsDomNode.setAttribute('title', title);
+      } else {
+        this.buttonsDomNode.removeAttribute('title');
+      }
+    }
+  },
   getIconUrl() {
     return this._button.iconUrl;
   },
@@ -166,6 +176,24 @@ const PMButton = L.Control.extend({
       let action;
       if (actions[name]) {
         action = actions[name];
+      } else if (
+        this._map.pm.Toolbar.buttons[name]?._button &&
+        this._map.pm.Toolbar._switchModeAction
+      ) {
+        // an action named after another toolbar button switches to that
+        // mode (e.g. union <-> subtract): rendered as
+        // the other mode's icon. Linked buttons can swap their own icon
+        // (union slot showing Subtract), so prefer the unswitched base
+        const otherButton = this._map.pm.Toolbar.buttons[name]._button;
+        const base = otherButton._familyBase || {};
+        const className = base.className || otherButton.className;
+        const title = base.title || otherButton.title;
+        action = {
+          name,
+          title,
+          text: `<div class='pm-action-button-mode ${className}' title='${title}' />`,
+          onClick: () => this._map.pm.Toolbar._switchModeAction(name),
+        };
       } else if (_action.text) {
         action = _action;
       } else {

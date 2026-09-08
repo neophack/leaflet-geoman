@@ -72,7 +72,7 @@ const GlobalRotateMode = {
     if (this.globalRotateModeEnabled()) {
       for (const id in layers) {
         const layer = layers[id];
-        if (this._isRelevantForRemoval(layer)) {
+        if (this._isRelevantForRotate(layer)) {
           layer.pm.enableRotate();
         }
       }

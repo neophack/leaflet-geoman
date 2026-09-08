@@ -1,5 +1,7 @@
 import { createGeodesicPolygon, getTranslation } from './helpers';
 import { _toLatLng, _toPoint } from './helpers/ModeHelper';
+import { measureLayer } from './helpers/Measure';
+import { toMeasurementData } from './Mixins/Measurements';
 
 const Utils = {
   calcMiddleLatLng(map, latlng1, latlng2) {
@@ -219,6 +221,28 @@ const Utils = {
     const pointA = map.project(center);
     const pointB = L.point(pointA.x + radiusInPx, pointA.y);
     return map.distance(map.unproject(pointB), center);
+  },
+  /**
+   * Returns the measurement of any layer in the documented structure
+   * `{ <key>: { value, unit, baseValueMeter } }` - `displayFormat` is
+   * 'metric' (default) or 'imperial'.
+   */
+  getMeasurements(layer, map, displayFormat = 'metric') {
+    let raw;
+    if (map && map.pm && typeof map.pm.calcMeasurement === 'function') {
+      raw = map.pm.calcMeasurement(layer, map);
+    } else {
+      raw = measureLayer(layer);
+    }
+    return toMeasurementData(raw, displayFormat);
+  },
+  /** Copies a layer and applies its options to the new layer. ⭐ */
+  copyLayer(layer) {
+    const map = layer && layer._map;
+    if (map && map.pm && typeof map.pm.copyLayer === 'function') {
+      return map.pm.copyLayer(layer);
+    }
+    return undefined;
   },
 };
 

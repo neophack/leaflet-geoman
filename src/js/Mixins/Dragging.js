@@ -250,6 +250,16 @@ const DragMixin = {
       this._dragging = true;
       L.DomUtil.addClass(el, 'leaflet-pm-dragging');
 
+      // a large layer is rendered with a decimated/culled subset - drag the
+      // full geometry instead, otherwise the drag would be reverted on the
+      // next map move (issue #366). Only resume at drag end when the drag
+      // itself suspended the optimization (edit mode suspends it too).
+      const optimizeState = this._layer._pmOptimize;
+      if (optimizeState && !optimizeState.suspended) {
+        this._map.pm?._suspendOptimization?.(this._layer);
+        this._dragResumesOptimization = true;
+      }
+
       if (!(this._layer instanceof L.Marker)) {
         // bring it to front to prevent drag interception
         this._layer.bringToFront();
@@ -324,6 +334,13 @@ const DragMixin = {
       // if the layer is not on the map, we have no DOM element
       if (el) {
         L.DomUtil.removeClass(el, 'leaflet-pm-dragging');
+      }
+
+      // restore the large-layer optimization suspended at drag start -
+      // before pm:dragend / pm:edit so listeners already see full geometry
+      if (this._dragResumesOptimization) {
+        this._dragResumesOptimization = false;
+        this._map.pm?._resumeOptimization?.(this._layer);
       }
 
       // fire pm:dragend event
@@ -481,7 +498,7 @@ const DragMixin = {
           for (const key in this._parentLayerGroup) {
             const lg = this._parentLayerGroup[key];
             if (lg.pm) {
-              layersToSync = lg.pm.getLayers(true);
+              layersToSync = layersToSync.concat(lg.pm.getLayers(true));
             }
           }
         }

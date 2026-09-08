@@ -145,9 +145,140 @@ const createKeyboardMixins = () => ({
 
     return false;
   },
+  // Toolbar hotkeys (M/L/P/R/C/T/F/E/G/X/O/S, Shift+M, Delete) - opt-in via
+  // the `keyboardShortcuts` global option. See Toolbar/L.PM.Toolbar.js's
+  // SHORTCUT_KEY_LABELS for the tooltip hints shown while it's on.
+  _handleToolShortcut(e) {
+    const pm = this.map.pm;
+    if (!pm.getGlobalOptions().keyboardShortcuts) {
+      return false;
+    }
+    // never hijack a browser/OS shortcut (Ctrl+M, Alt+F, Cmd+..., etc.)
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return false;
+    }
+    // don't steal letter keys while the user types in an input / textarea
+    const tag = e.target?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) {
+      return false;
+    }
+    // every map binds its own document-level listener - don't steal the
+    // shortcut when the user interacts with a different map on the page
+    const targetMapContainer = e.target?.closest?.('.leaflet-container');
+    if (targetMapContainer && targetMapContainer !== this.map.getContainer()) {
+      return false;
+    }
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      // with an active selection, Delete/Backspace removes the selected
+      // layers (multi-select aware, one undo step); without one, Delete
+      // keeps toggling the Removal mode like before
+      if (pm.getSelectedLayers().length > 0) {
+        e.preventDefault();
+        pm.removeSelectedLayers();
+        return true;
+      }
+      if (e.key === 'Delete') {
+        e.preventDefault();
+        pm.toggleGlobalRemovalMode();
+        return true;
+      }
+      return false;
+    }
+
+    const key = e.key.toLowerCase();
+
+    if (e.shiftKey) {
+      if (key === 'm' && pm.Draw.CircleMarker) {
+        e.preventDefault();
+        pm.Draw.CircleMarker.toggle();
+        return true;
+      }
+      return false;
+    }
+
+    const drawShapes = {
+      m: 'Marker',
+      l: 'Line',
+      p: 'Polygon',
+      r: 'Rectangle',
+      c: 'Circle',
+      t: 'Text',
+      f: 'Freehand',
+    };
+    if (drawShapes[key] && pm.Draw[drawShapes[key]]) {
+      e.preventDefault();
+      pm.Draw[drawShapes[key]].toggle();
+      return true;
+    }
+
+    if (key === 'x' && pm.Draw.Cut) {
+      e.preventDefault();
+      // matches the toolbar's Cut button options (see L.PM.Toolbar.js)
+      pm.Draw.Cut.toggle({
+        snappable: true,
+        cursorMarker: true,
+        allowSelfIntersection: false,
+      });
+      return true;
+    }
+
+    const globalModes = {
+      e: 'toggleGlobalEditMode',
+      g: 'toggleGlobalDragMode',
+      o: 'toggleGlobalRotateMode',
+      s: 'toggleGlobalScaleMode',
+    };
+    if (globalModes[key] && typeof pm[globalModes[key]] === 'function') {
+      e.preventDefault();
+      pm[globalModes[key]]();
+      return true;
+    }
+
+    return false;
+  },
   _unbindKeyListenerEvents() {
     L.DomEvent.off(document, 'keydown keyup', this._onKeyListener, this);
     L.DomEvent.off(window, 'blur', this._onBlur, this);
+  },
+  _handleUndoRedoKeys(e) {
+    const pm = this.map.pm;
+    const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+    if (!isCtrlOrMeta) {
+      return false;
+    }
+    // don't hijack shortcuts while the user types in an input / textarea
+    // (f.ex. the Text layer)
+    const tag = e.target?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) {
+      return false;
+    }
+    // every map binds its own document-level listener - don't steal the
+    // shortcut when the user interacts with a different map on the page
+    const targetMapContainer = e.target?.closest?.('.leaflet-container');
+    if (targetMapContainer && targetMapContainer !== this.map.getContainer()) {
+      return false;
+    }
+
+    const key = e.key.toLowerCase();
+    // only take over the shortcut (and prevent the browser default) when
+    // there is actually something to undo/redo, so an empty geoman history
+    // doesn't swallow Ctrl+Z/Y meant for another widget on the page
+    if (key === 'z' && !e.shiftKey) {
+      if (!pm.hasUndo()) {
+        return false;
+      }
+      e.preventDefault();
+      return pm.undo();
+    }
+    if (key === 'y' || (key === 'z' && e.shiftKey)) {
+      if (!pm.hasRedo()) {
+        return false;
+      }
+      e.preventDefault();
+      return pm.redo();
+    }
+    return false;
   },
   _onKeyListener(e) {
     let focusOn = 'document';
@@ -174,6 +305,10 @@ const createKeyboardMixins = () => ({
       if (e.key === 'Enter') {
         this._handleEnterKey(e);
       }
+      // Handle Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z for undo & redo
+      this._handleUndoRedoKeys(e);
+      // Handle the opt-in toolbar hotkeys (M/L/P/R/C/T/F/E/G/X/O/S/Delete)
+      this._handleToolShortcut(e);
     }
   },
   _onBlur(e) {

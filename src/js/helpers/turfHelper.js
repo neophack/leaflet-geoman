@@ -59,6 +59,19 @@ export function intersect(poly1, poly2) {
   return turfMultiPolygon(intersection);
 }
 
+export function union(polygon1, ...polygons) {
+  const geom1 = getGeometry(polygon1);
+  const geoms = [geom1.coordinates];
+  polygons.forEach((polygon) => {
+    geoms.push(getGeometry(polygon).coordinates);
+  });
+
+  const unioned = polygonClipping.union(geoms[0], ...geoms.slice(1));
+  if (unioned.length === 0) return null;
+  if (unioned.length === 1) return turfPolygon(unioned[0]);
+  return turfMultiPolygon(unioned);
+}
+
 export function difference(polygon1, polygon2) {
   const geom1 = getGeometry(polygon1);
   const geom2 = getGeometry(polygon2);

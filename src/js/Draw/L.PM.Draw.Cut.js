@@ -144,7 +144,11 @@ Draw.Cut = Draw.Polygon.extend({
       if (l instanceof L.Polygon) {
         // Also for L.Rectangle
         // easiest way to clone the complete latlngs without reference
-        newLayer = L.polygon(l.getLatLngs());
+        // (for large layers the rendered subset would be cloned - use the
+        // full geometry instead, issue #366)
+        const sourceLatLngs =
+          this._map.pm?._fullLatLngsOf?.(l) || l.getLatLngs();
+        newLayer = L.polygon(sourceLatLngs);
         const coords = newLayer.getLatLngs();
 
         // snapping points added to the layer, so borders are cutted correct

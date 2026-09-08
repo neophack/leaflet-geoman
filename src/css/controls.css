@@ -203,4 +203,57 @@
   .pm-action-button-mode.control-icon {
   filter: brightness(0) invert(1);
   width: 18px;
+  height: 18px;
+  margin: 5px 0;
+  box-sizing: border-box;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center center;
+}
+
+/* Extension feature icons */
+.leaflet-pm-toolbar .leaflet-pm-icon-union {
+  background-image: url('../assets/icons/Union.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-difference {
+  background-image: url('../assets/icons/Difference.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-split {
+  background-image: url('../assets/icons/Split.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-scale {
+  background-image: url('../assets/icons/Scale.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-lasso {
+  background-image: url('../assets/icons/Lasso.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-copy {
+  background-image: url('../assets/icons/Copy.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-simplify {
+  background-image: url('../assets/icons/Simplify.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-front {
+  background-image: url('../assets/icons/Front.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-back {
+  background-image: url('../assets/icons/Back.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-freehand {
+  background-image: url('../assets/icons/Freehand.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-pin {
+  background-image: url('../assets/icons/Pin.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-snapguides {
+  background-image: url('../assets/icons/SnapGuides.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-autotrace {
+  background-image: url('../assets/icons/AutoTrace.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-point {
+  background-image: url('../assets/icons/Point.svg');
+}
+.leaflet-pm-toolbar .leaflet-pm-icon-measurement {
+  background-image: url('../assets/icons/Measurement.svg');
 }

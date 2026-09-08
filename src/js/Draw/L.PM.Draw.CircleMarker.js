@@ -55,6 +55,10 @@ Draw.CircleMarker = Draw.extend({
 
       // this is the marker in the center of the circle
       this._centerMarker = L.marker(this._map.getCenter(), {
+        // interactive markers are their own click target and stop the click
+        // from ever reaching the map (Marker.options.bubblingMouseEvents is
+        // false by default) - same fix as the Line/Polygon hint marker #911
+        interactive: false,
         icon: L.divIcon({ className: 'marker-icon' }),
         draggable: false,
         zIndexOffset: 100,
@@ -64,6 +68,9 @@ Draw.CircleMarker = Draw.extend({
 
       // this is the hintmarker on the mouse cursor
       this._hintMarker = L.marker(this._map.getCenter(), {
+        // always sits exactly under the cursor - must not swallow the click
+        // meant for the map (places the center / finishes the circle) #911
+        interactive: false,
         zIndexOffset: 110,
         icon: L.divIcon({ className: 'marker-icon cursor-marker' }),
       });
@@ -104,6 +111,9 @@ Draw.CircleMarker = Draw.extend({
       this._hintMarker = new this._BaseCircleClass(this._map.getCenter(), {
         radius: this._defaultRadius,
         ...this.options.templineStyle,
+        // always sits exactly under the cursor - must not swallow the click
+        // meant for the map (places the marker) #911
+        interactive: false,
       });
       this._setPane(this._hintMarker, 'layerPane');
       this._hintMarker._pmTempLayer = true;

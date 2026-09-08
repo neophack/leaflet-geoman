@@ -13,6 +13,8 @@ Edit.CircleMarker = Edit.extend({
 
     // create polygon around the circle border
     this._updateHiddenPolyCircle();
+
+    this._initSelectionClick();
   },
   // TODO: remove default option in next major Release
   enable(options = { draggable: true, snappable: true }) {
@@ -133,6 +135,12 @@ Edit.CircleMarker = Edit.extend({
         this._outerMarker.on('move', this._syncCircleRadius, this);
       } else {
         this._disableSnapping();
+      }
+
+      if (this.options.pinning) {
+        this._initPinning();
+      } else {
+        this._disablePinning();
       }
     } else {
       if (this.options.draggable) {
