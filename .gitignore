@@ -11,3 +11,4 @@ npm-debug.log
 .eslintcache
 .env
 *.tgz
+demo/.e2e-final.png
