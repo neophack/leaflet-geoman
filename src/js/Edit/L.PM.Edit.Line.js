@@ -305,8 +305,12 @@ Edit.Line = Edit.extend({
     if (!this._enabled || !this._markerGroup) {
       return;
     }
-    if (this._dragging) {
-      // rebuilding below a running drag breaks it - defer to drag end
+    if (this._dragging || this._vertexMarkerDragging) {
+      // rebuilding below a running drag breaks it - defer to drag end.
+      // `_dragging` covers whole-layer dragging, `_vertexMarkerDragging`
+      // covers a single vertex marker being dragged (e.g. simplified rings
+      // above `simplifyEditMarkers` where markers get rebuilt with a
+      // different decimation for the new zoom level)
       this._needsMarkerRebuild = true;
       return;
     }
@@ -989,6 +993,14 @@ Edit.Line = Edit.extend({
   },
   _onMarkerDragStart(e) {
     const marker = e.target;
+    // rebuilding the marker array mid-drag (e.g. a zoomend from scroll-wheel
+    // zooming while the mouse button is still down) would detach the
+    // actively-dragged marker from `_markers` - it keeps following the
+    // mouse but a new, disconnected marker appears at the recomputed
+    // position instead. `this._dragging` only tracks whole-layer dragging,
+    // so vertex drags need their own flag for `_onZoomEndRebuildMarkers` to
+    // defer against
+    this._vertexMarkerDragging = true;
     this._preventRenderingMarkers(true);
 
     // When intersection is true while calling enable(), the cachedColor is already set
@@ -1157,6 +1169,7 @@ Edit.Line = Edit.extend({
     const marker = e.target;
     this._preventRenderingMarkers(false);
     this._simplifyDragStart = null;
+    this._vertexMarkerDragging = false;
 
     if (!this._vertexValidationDragEnd(marker)) {
       return;

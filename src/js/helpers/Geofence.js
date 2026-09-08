@@ -91,6 +91,65 @@ export function geometriesIntersect(a, b) {
 }
 
 /**
+ * Cheap lat/lng bounds of a layer, used to reject geofence candidates before
+ * paying for a `toGeoJSON()` conversion and a turf call. Leaflet caches
+ * `getBounds()` on Polyline/Polygon (just returns `this._bounds`), so this
+ * never re-scans a layer's coordinates. Returns `null` when no bounds can be
+ * determined (the caller must not skip anything in that case).
+ */
+function getGeofenceBounds(layer) {
+  if (!layer) {
+    return null;
+  }
+  if (typeof layer.getBounds === 'function') {
+    try {
+      const bounds = layer.getBounds();
+      if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+        return bounds;
+      }
+    } catch (e) {
+      // fall through to the point-based fallback below
+    }
+  }
+  if (typeof layer.getLatLng === 'function') {
+    try {
+      const latlng = layer.getLatLng();
+      if (latlng) {
+        return L.latLngBounds(latlng, latlng);
+      }
+    } catch (e) {
+      // no usable bounds
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether two shapes' bounds are close enough that they could possibly
+ * intersect. Only ever used to SKIP the expensive exact check - unknown
+ * bounds never cause a skip, so this can't produce a false negative.
+ */
+function boundsMightOverlap(a, b) {
+  if (!a || !b) {
+    return true;
+  }
+  return a.intersects(b);
+}
+
+/**
+ * Whether `containerBounds` can be proven to NOT contain `innerBounds`
+ * (bounds containment is a necessary condition for geometry containment).
+ * Only ever used to SKIP the expensive exact check for a single candidate -
+ * unknown bounds never cause a skip.
+ */
+function boundsCannotContain(containerBounds, innerBounds) {
+  if (!containerBounds || !innerBounds) {
+    return false;
+  }
+  return !containerBounds.contains(innerBounds);
+}
+
+/**
  * Checks `layer` against its own `preventIntersection` / `requireContainment`
  * options (arrays of other layers). Returns 'intersection', 'containment' or
  * null (no violation / nothing configured).
@@ -100,11 +159,20 @@ export function checkGeofencing(layer, options) {
   if (!geo) {
     return null;
   }
+  // computed once per call, used to bounding-box pre-filter every candidate
+  // below - this runs on every drag/mousemove frame, so avoiding a
+  // toGeoJSON() conversion and a turf call for fences nowhere near `layer`
+  // matters a lot when there are many of them
+  const layerBounds = getGeofenceBounds(layer);
 
   const preventIntersection = options?.preventIntersection;
   if (preventIntersection && preventIntersection.length > 0) {
     const violated = preventIntersection.some((other) => {
       if (!other || other === layer) {
+        return false;
+      }
+      const otherBounds = getGeofenceBounds(other);
+      if (!boundsMightOverlap(layerBounds, otherBounds)) {
         return false;
       }
       const otherGeo = toGeofenceGeoJSON(other);
@@ -119,6 +187,10 @@ export function checkGeofencing(layer, options) {
   if (requireContainment && requireContainment.length > 0) {
     const contained = requireContainment.some((container) => {
       if (!container) {
+        return false;
+      }
+      const containerBounds = getGeofenceBounds(container);
+      if (boundsCannotContain(containerBounds, layerBounds)) {
         return false;
       }
       const containerGeo = toGeofenceGeoJSON(container);

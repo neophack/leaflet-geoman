@@ -23,8 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Selection clicks no longer break Leaflet's click routing: binding the click-to-select as a Leaflet event on every layer consumed clicks (drawing / cutting on top of layers was impossible), and stopping propagation at DOM level killed user `layer.on('click')` listeners. The handler is now bound on the layer element, never stops propagation and marks the event so background-click deselection still works
 - Toolbar blocks no longer wrap into columns next to the stack - the wrapped columns (and the wide text action buttons) covered the map and swallowed map clicks (Cut Mode clicks hit "Remove Last Vertex")
 - Geoman's internal helper markers (vertex / middle / hint markers) are never selection-clickable anymore
+- On rings above `simplifyEditMarkers` (default 100), zooming (e.g. scroll-wheel) while dragging a vertex no longer rebuilds the decimated marker set mid-gesture - the dragged marker used to get silently detached from `_markers`, still following the mouse while a disconnected marker appeared at the recomputed position for the new zoom level instead
 - Measurement tooltips no longer overwrite or remove a tooltip the user bound on a layer themselves
 - Scaling a circle no longer crashes the scale start (circles have no `getLatLngs`)
+
+### Performance
+
+- Snapping: `_calcClosestLayers` (run on every drag event while `snappable` is on) now rejects layers whose cached bounds can't possibly be within `snapDistance` in O(1), instead of always running the O(vertices) exact distance scan on every snap-candidate layer - scenes with hundreds/thousands of snappable layers no longer scan all of their vertices on every mouse move
+- Geofencing: `checkGeofencing` (run on every drag/edit `pm:change`) now rejects `preventIntersection` / `requireContainment` fence layers whose cached bounds can't possibly overlap (or contain) the edited shape in O(1), instead of always converting every fence to GeoJSON and running a turf intersection/containment check against it on every frame
+- Measurements: `_measurePolygon` (run on every drag/edit `pm:change` while the live measurement tooltip is on) no longer rebuilds a throwaway `L.polygon()` or JSON-clones every ring just to get a closable copy of the coordinates - `layer.getLatLngs()` already returns that structure, and a plain `.slice()` is enough for the copy
 
 ## [2.20.0] - 2026-06-23
 

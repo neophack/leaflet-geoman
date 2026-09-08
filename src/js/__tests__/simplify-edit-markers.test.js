@@ -204,6 +204,36 @@ describe('simplified edit markers (simplifyEditMarkers)', () => {
     layer.pm.disable();
   });
 
+  it('defers a zoomend marker rebuild while a vertex is being dragged', () => {
+    // a zoomend firing mid-drag (e.g. scroll-wheel zoom while the mouse
+    // button is still held) used to rebuild `_markers` immediately because
+    // the rebuild guard only checked whole-layer dragging (`pm._dragging`),
+    // never set during a single vertex marker's drag. That detached the
+    // actively-dragged marker from `_markers` mid-gesture: it kept
+    // following the mouse but a new, disconnected marker appeared at the
+    // recomputed position for the new zoom level instead
+    const layer = L.polyline(straightLine(2000)).addTo(map);
+    layer.pm.enable();
+
+    const shown = shownIndices(layer);
+    const draggedMarker =
+      layer.pm._markers[shown[Math.floor(shown.length / 2)]];
+
+    draggedMarker.fire('dragstart', { target: draggedMarker });
+    map.setZoom(10, { animate: false }); // fires zoomend mid-drag
+
+    // the rebuild must be deferred, not applied immediately
+    expect(layer.pm._markers.includes(draggedMarker)).toBe(true);
+    expect(layer.pm._needsMarkerRebuild).toBe(true);
+
+    draggedMarker.fire('dragend', { target: draggedMarker });
+
+    // the deferred rebuild runs once the drag is over
+    expect(layer.pm._needsMarkerRebuild).toBe(false);
+
+    layer.pm.disable();
+  });
+
   it('keeps the geometry exportable after interpolated drags', () => {
     // 0.01deg spacing: every vertex is far more than the marker spacing
     // apart at zoom 14, so all of them are editable

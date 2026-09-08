@@ -320,6 +320,15 @@ const SnapMixin = {
     // pushed into closestLayers, which may be farther-but-tied candidates)
     let closestDistance;
 
+    // Only the single-closest-layer lookup (the actual snapping decision,
+    // called once per drag/mousemove event) is cheap to bounding-box
+    // pre-filter: it only cares whether a layer can possibly be within
+    // snapDistance, so a cached O(1) bounds check can reject far-away
+    // layers without their O(vertices) exact distance scan.
+    const point =
+      amount === 1 ? this._map.latLngToContainerPoint(latlng) : null;
+    const snapDistance = this.options.snapDistance || 30;
+
     // loop through the layers
     layers.forEach((layer, index) => {
       // For Circles and CircleMarkers to prevent that they snap to the own borders.
@@ -331,7 +340,9 @@ const SnapMixin = {
         return;
       }
       // find the closest latlng, segment and the distance of this layer to the dragged marker latlng
-      const results = this._calcLayerDistances(latlng, layer);
+      const results =
+        (point && this._estimateOutOfSnapRange(point, layer, snapDistance)) ||
+        this._calcLayerDistances(latlng, layer);
       results.distance = Math.floor(results.distance);
 
       if (this.debugIndicatorLines) {
@@ -388,6 +399,66 @@ const SnapMixin = {
       return result;
     }
     return [result];
+  },
+  /**
+   * Cheap O(1) rejection test used by `_calcClosestLayers` before it runs
+   * the O(vertices) exact distance scan (`_calcLayerDistances`). Leaflet
+   * caches `getBounds()` on Polyline/Polygon/Circle (just returns
+   * `this._bounds`), so this never re-scans the layer's coordinates.
+   *
+   * Returns `null` when the layer might still be within `snapDistance` (or
+   * has no cheap bounds to check, e.g. a plain CircleMarker) - the caller
+   * must fall back to the exact calculation. Otherwise returns a
+   * `_calcLayerDistances`-shaped result carrying the exact minimum possible
+   * distance from `point` to the layer's bounds - a valid lower bound for
+   * the true distance to its geometry, since the geometry lies within its
+   * bounds. That lower bound is already `> snapDistance`, so the layer can
+   * never be picked as an actual snap target and the approximation is safe.
+   */
+  _estimateOutOfSnapRange(point, layer, snapDistance) {
+    if (typeof layer.getBounds !== 'function') {
+      return null;
+    }
+    const map = this._map;
+    let bounds;
+    try {
+      bounds = layer.getBounds();
+    } catch {
+      return null;
+    }
+    if (!bounds || !bounds.isValid()) {
+      return null;
+    }
+    const nw = map.latLngToContainerPoint(bounds.getNorthWest());
+    const se = map.latLngToContainerPoint(bounds.getSouthEast());
+    const minX = Math.min(nw.x, se.x);
+    const maxX = Math.max(nw.x, se.x);
+    const minY = Math.min(nw.y, se.y);
+    const maxY = Math.max(nw.y, se.y);
+
+    const dx = Math.max(minX - point.x, 0, point.x - maxX);
+    const dy = Math.max(minY - point.y, 0, point.y - maxY);
+    const lowerBound = Math.sqrt(dx * dx + dy * dy);
+
+    if (lowerBound <= snapDistance) {
+      // might still be a real candidate, do the exact calculation
+      return null;
+    }
+
+    const clampedPoint = L.point(
+      Math.min(Math.max(point.x, minX), maxX),
+      Math.min(Math.max(point.y, minY), maxY)
+    );
+    const approxLatLng = map.containerPointToLatLng(clampedPoint);
+    return {
+      latlng: approxLatLng,
+      // degenerate segment: `_checkPrioritiySnapping` is called
+      // unconditionally before the snap-distance check and indexes into
+      // `.segment` - keep it from throwing. It can never win the snap
+      // since `distance` here already exceeds `snapDistance`.
+      segment: [approxLatLng, approxLatLng],
+      distance: lowerBound,
+    };
   },
   _calcLayerDistances(latlng, layer) {
     const map = this._map;

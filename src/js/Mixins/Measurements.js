@@ -177,8 +177,14 @@ const MeasurementsMixin = {
   },
   _measurePolygon(layer, map) {
     // outer ring minus holes; the ring is closed before measuring so the
-    // perimeter includes the last->first edge
-    const rings = L.polygon(layer.getLatLngs()).getLatLngs();
+    // perimeter includes the last->first edge.
+    // `layer` is already a real L.Polygon, whose own `_setLatLngs` always
+    // normalizes `_latlngs` to an array of rings (wrapping a flat single
+    // ring) and dedupes an equal closing point - `getLatLngs()` already IS
+    // that structure, no need to rebuild it via a throwaway `L.polygon()`
+    // (which would just redo the same O(vertices) conversion + bounds
+    // computation on every call, e.g. every vertex-drag mousemove).
+    const rings = layer.getLatLngs();
     let distance;
     let area;
     let segmentdistance;
@@ -187,7 +193,10 @@ const MeasurementsMixin = {
       if (cleaned.length < 2) {
         return;
       }
-      const closed = JSON.parse(JSON.stringify(cleaned));
+      // a plain copy is enough - nothing below mutates an individual
+      // latlng, this just needs an array `_cleanRing`'s own copy can't be
+      // extended without pushing the closing point onto the layer's coords
+      const closed = cleaned.slice();
       closed.push(closed[0]);
       const ringDistance = this._measureDistance(closed, map);
       const ringArea = measureArea(closed);
