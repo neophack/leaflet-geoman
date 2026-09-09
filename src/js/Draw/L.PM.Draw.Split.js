@@ -184,25 +184,43 @@ Draw.Split = Draw.Line.extend({
         (bounds.getEast() - bounds.getWest()) ** 2
     );
 
+    // extend the line beyond the bbox, continuing along the direction of its
+    // first/last segment so the actual (possibly bent) path is preserved
+    const afterA = line.length > 1 ? line[1] : b;
+    const beforeB = line.length > 1 ? line[line.length - 2] : a;
+
+    let dxStart = a.lng - afterA.lng;
+    let dyStart = a.lat - afterA.lat;
+    const lenStart = Math.sqrt(dxStart ** 2 + dyStart ** 2) || 1;
+    dxStart /= lenStart;
+    dyStart /= lenStart;
+    const a0 = L.latLng(a.lat + dyStart * diag, a.lng + dxStart * diag);
+
+    let dxEnd = b.lng - beforeB.lng;
+    let dyEnd = b.lat - beforeB.lat;
+    const lenEnd = Math.sqrt(dxEnd ** 2 + dyEnd ** 2) || 1;
+    dxEnd /= lenEnd;
+    dyEnd /= lenEnd;
+    const b0 = L.latLng(b.lat + dyEnd * diag, b.lng + dxEnd * diag);
+
+    // perpendicular offset (to one side, so the cutter covers a half-plane),
+    // based on the overall start-to-end direction of the drawn line
     let dx = b.lng - a.lng;
     let dy = b.lat - a.lat;
     const len = Math.sqrt(dx ** 2 + dy ** 2) || 1;
     dx /= len;
     dy /= len;
+    const px = -dy * diag;
+    const py = dx * diag;
 
-    // extend the line beyond the bbox
-    const a0 = L.latLng(a.lat - dy * diag, a.lng - dx * diag);
-    const b0 = L.latLng(b.lat + dy * diag, b.lng + dx * diag);
-    // perpendicular offset (to one side, so the cutter covers a half-plane)
-    const px = -dy;
-    const py = dx;
-
-    // rectangle with one edge on the (extended) line, reaching diag to one side
+    // polygon whose inner edge follows the entire drawn line (extended
+    // beyond the bbox at both ends), closed with a far offset loop to one side
     const ring = [
       [a0.lng, a0.lat],
+      ...line.map((latlng) => [latlng.lng, latlng.lat]),
       [b0.lng, b0.lat],
-      [b0.lng + px * diag, b0.lat + py * diag],
-      [a0.lng + px * diag, a0.lat + py * diag],
+      [b0.lng + px, b0.lat + py],
+      [a0.lng + px, a0.lat + py],
       [a0.lng, a0.lat],
     ];
     return turfPolygon([ring]);

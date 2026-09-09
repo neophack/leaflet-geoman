@@ -644,6 +644,38 @@ describe('Split', () => {
     expect(map.hasLayer(target)).toBe(false);
   });
 
+  it('follows a bent split line instead of a straight chord between its endpoints', () => {
+    const target = L.polygon(square(52.55, 52.45, 13.3, 13.5)).addTo(map);
+
+    map.pm.Draw.Split.enable({ snappable: false });
+    // Both endpoints share the same lng (13.35), but the line bulges east
+    // past lng 13.5 in the middle. A cutter built only from the endpoints
+    // would produce a straight vertical cut at lng 13.35 and never touch
+    // the polygon's east edge.
+    map.pm.Draw.Split._layer.setLatLngs([
+      [52.6, 13.35],
+      [52.5, 13.55],
+      [52.4, 13.35],
+    ]);
+    map.pm.Draw.Split._finishShape();
+
+    const layers = map.pm
+      .getGeomanLayers()
+      .filter((l) => l instanceof L.Polygon);
+    expect(layers).toHaveLength(2);
+
+    // The original square's only vertices at lng=13.5 are the two corners
+    // (lat 52.45 / 52.55). Following the bend clips a new vertex onto the
+    // east edge strictly between those corners.
+    const touchesEastEdgeMidway = layers.some((l) => {
+      const latlngs = l.getLatLngs()[0];
+      return latlngs.some(
+        (ll) => ll.lng > 13.49 && ll.lat > 52.46 && ll.lat < 52.54
+      );
+    });
+    expect(touchesEastEdgeMidway).toBe(true);
+  });
+
   it('leaves the layer untouched when the line does not cross', () => {
     const target = L.polygon(square(52.54, 52.5, 13.38, 13.42)).addTo(map);
     const splitEvent = vi.fn();
