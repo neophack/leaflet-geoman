@@ -546,7 +546,13 @@ async function runDemo(iteration) {
   await clickAt(-100, 30);
   await clickAt(0, 60);
   await clickAt(70, 130);
-  await clickAt(-100, 30); // close
+  // finish via the action button: a closing click back on the start point is
+  // unreliable here because vertex snapping can shift the first click's
+  // actual position, so the closing click no longer matches it exactly
+  await page
+    .getByRole('button', { name: 'Finish', exact: true })
+    .click()
+    .catch(() => {});
   await page.waitForTimeout(HEADED ? 1600 : 900);
   check(
     'split adds layers',

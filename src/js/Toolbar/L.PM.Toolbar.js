@@ -609,6 +609,7 @@ const Toolbar = L.Class.extend({
     const splitButton = {
       title: getTranslation('buttonTitles.splitButton'),
       className: 'control-icon leaflet-pm-icon-split',
+      jsClass: 'Split',
       onClick: () => {},
       afterClick: () => {
         this.map.pm.toggleGlobalSplitMode({
